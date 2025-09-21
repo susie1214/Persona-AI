@@ -1,0 +1,13 @@
+diart
+pyannote.audio
+faster-whisper==1.0.3
+soundfile
+librosa
+numpy
+pandas
+matplotlib
+python-dotenv
+huggingface_hub
+fastapi
+python-socketio[asgi]
+uvicorn
