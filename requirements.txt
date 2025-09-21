@@ -11,3 +11,4 @@ huggingface_hub
 fastapi
 python-socketio[asgi]
 uvicorn
+qdrant-client
