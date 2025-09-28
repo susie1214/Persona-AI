@@ -5,13 +5,14 @@ from typing import Optional
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextBrowser, QTextEdit,
-    QPushButton, QLabel, QComboBox, QMessageBox, QFrame
+    QPushButton, QLabel, QComboBox, QMessageBox, QFrame, QSplitter
 )
-from PyQt6.QtCore import QThread
+from PyQt6.QtCore import QThread, Qt
 
 from realtime_diar.config import Config
 from realtime_diar.core import RealTimeDiarization
 
+from openai import OpenAI
 
 class WorkerThread(QThread):
     def __init__(self, rt_diar: RealTimeDiarization, device_index: Optional[int] = None):
@@ -26,45 +27,63 @@ class WorkerThread(QThread):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("실시간 화자분리 채팅 GUI")
+        self.setWindowTitle("Persona-AI")
         self.resize(900, 700)
 
         self.config = Config()
         self.rt = RealTimeDiarization(self.config)
 
+        # 대화 창
         self.chat_view = QTextBrowser()
         self.chat_view.setFrameShape(QFrame.Shape.StyledPanel)
         self.chat_view.setOpenExternalLinks(False)
 
-        self.input_edit = QTextEdit()
-        self.input_edit.setFixedHeight(80)
-        self.send_button = QPushButton("보내기")
+        # 요약 뷰
+        self.summary_view = QTextBrowser()
+        self.summary_view.setFrameShape(QFrame.Shape.StyledPanel)
+        self.summary_view.setOpenExternalLinks(False)
+
+        # self.input_edit = QTextEdit()
+        # self.input_edit.setFixedHeight(80)
+        # self.send_button = QPushButton("보내기")
         self.start_button = QPushButton("시작")
         self.stop_button = QPushButton("중지")
+        self.summary_button = QPushButton("화자별 요약")
         self.device_combo = QComboBox()
         self.status_label = QLabel("상태: 준비됨")
 
+        # 상단 버튼 레이아웃
         top_layout = QHBoxLayout()
         top_layout.addWidget(QLabel("입력 디바이스:"))
         top_layout.addWidget(self.device_combo)
         top_layout.addWidget(self.start_button)
         top_layout.addWidget(self.stop_button)
+        top_layout.addWidget(self.summary_button)
         top_layout.addStretch()
         top_layout.addWidget(self.status_label)
 
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addWidget(self.input_edit)
-        right_buttons = QVBoxLayout()
-        right_buttons.addWidget(self.send_button)
-        right_buttons.addStretch()
-        bottom_layout.addLayout(right_buttons)
-
+        # bottom_layout = QHBoxLayout()
+        # bottom_layout.addWidget(self.input_edit)
+        # right_buttons = QVBoxLayout()
+        # right_buttons.addWidget(self.send_button)
+        # right_buttons.addStretch()
+        # bottom_layout.addLayout(right_buttons)
+        
+        # main splitter: 채팅창 + 요약창
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.chat_view)
+        splitter.addWidget(self.summary_view)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        
+        # 메인 레이아웃
         main_layout = QVBoxLayout(self)
         main_layout.addLayout(top_layout)
         main_layout.addWidget(self.chat_view, stretch=1)
-        main_layout.addLayout(bottom_layout)
+        # main_layout.addLayout(bottom_layout)
 
-        self.send_button.clicked.connect(self.on_send_clicked)
+        # 버튼 클릭 시그널
+        # self.send_button.clicked.connect(self.on_send_clicked)
         self.start_button.clicked.connect(self.on_start)
         self.stop_button.clicked.connect(self.on_stop)
 
@@ -74,6 +93,8 @@ class MainWindow(QWidget):
 
         self.worker_thread: Optional[WorkerThread] = None
         self.populate_devices()
+        
+        self.client = OpenAI(api_key = self.config.api_key)
 
     def append_chat(self, text: str, who: str = "bot", timestamp: Optional[str] = None):
         if timestamp is None:
@@ -105,21 +126,27 @@ class MainWindow(QWidget):
                     .replace("\n", "<br>"))
 
     def populate_devices(self):
+        # self.device_combo.clear()
+        # try:
+        #     devices = self.rt.get_available_audio_devices()
+        #     if not devices:
+        #         self.device_combo.addItem("기본 디바이스 (입력 없음)", -1)
+        #     else:
+        #         for idx, name in devices.items():
+        #             self.device_combo.addItem(f"{idx}: {name}", idx)
+        # except Exception as e:
+        #     self.device_combo.addItem("디바이스 조회 실패", -1)
+        #     self.status_label.setText("상태: 디바이스 조회 실패")
         self.device_combo.clear()
-        try:
-            devices = self.rt.get_available_audio_devices()
-            if not devices:
-                self.device_combo.addItem("기본 디바이스 (입력 없음)", -1)
-            else:
-                for idx, name in devices.items():
-                    self.device_combo.addItem(f"{idx}: {name}", idx)
-        except Exception as e:
-            self.device_combo.addItem("디바이스 조회 실패", -1)
-            self.status_label.setText("상태: 디바이스 조회 실패")
+        devices = self.rt.get_available_audio_devices()
 
+        for idx, name in devices.items():
+            self.device_combo.addItem(f"{name} ({idx})", idx)
+
+    # callback 함수들
     def on_transcription(self, timestamp: str, speaker: str, text: str):
-        display_text = f"[{speaker}] {text}"
-        self.append_chat(display_text, who="bot", timestamp=timestamp)
+        self.chat_view.append(f"[{timestamp}] <b>{speaker}</b>: {text}")
+        self.chat_view.verticalScrollBar().setValue(self.chat_view.verticalScrollBar().maximum())
 
     def on_status(self, message: str):
         self.status_label.setText(f"상태: {message}")
@@ -131,13 +158,13 @@ class MainWindow(QWidget):
         self.chat_view.append(f"<div style='color:red; font-weight:bold'>[ERROR] {self._escape_html(message)}</div>")
         self.chat_view.verticalScrollBar().setValue(self.chat_view.verticalScrollBar().maximum())
 
-    def on_send_clicked(self):
-        text = self.input_edit.toPlainText().strip()
-        if not text:
-            return
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.append_chat(text, who="user", timestamp=timestamp)
-        self.input_edit.clear()
+    # def on_send_clicked(self):
+    #     text = self.input_edit.toPlainText().strip()
+    #     if not text:
+    #         return
+    #     timestamp = datetime.now().strftime("%H:%M:%S")
+    #     self.append_chat(text, who="user", timestamp=timestamp)
+    #     self.input_edit.clear()
 
     def on_start(self):
         idx = self.device_combo.currentData()
@@ -154,6 +181,33 @@ class MainWindow(QWidget):
         self.rt.cleanup()
         self.chat_view.append("<div style='color:orange'>[SYSTEM] 녹음/처리를 중지했습니다.</div>")
         self.status_label.setText("상태: 중지됨")
+
+    # ---------- summary ----------
+    def on_summary_clicked(self):
+        self.summary_view.clear()
+        if not self.rt.speaker_texts:
+            self.summary_view.append("<i>아직 전사된 데이터가 없습니다.</i>")
+            return
+
+        for speaker, texts in self.rt.speaker_texts.items():
+            combined_text = " ".join(texts)
+            
+            print(f"[DEBUG] {speaker} combined_text : {combined_text}")
+            # OpenAI API로 요약
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "한국어 텍스트를 간결하게 요약해줘."},
+                        {"role": "user", "content": combined_text}
+                    ],
+                    max_tokens=1024
+                )
+                summary = response.choices[0].message.content
+            except Exception as e:
+                summary = f"(요약 실패: {e})"
+
+            self.summary_view.append(f"<b>{speaker} 요약:</b> {summary}\n")
 
     def closeEvent(self, event):
         try:

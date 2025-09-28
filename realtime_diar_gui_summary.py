@@ -401,7 +401,7 @@ class MainWindow(QWidget):
         for speaker, texts in self.rt.speaker_texts.items():
             combined_text = " ".join(texts)
             
-            print(f"[DEBUG] combined_text : {combined_text}")
+            print(f"[DEBUG] {speaker} combined_text : {combined_text}")
             # OpenAI API로 요약
             try:
                 response = self.client.chat.completions.create(
