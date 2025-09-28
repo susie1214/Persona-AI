@@ -1,0 +1,36 @@
+# --- Diarization & STT ---
+pyannote.audio==3.3.2
+faster-whisper==1.0.3
+diart==0.9.2
+
+# --- Audio I/O ---
+soundfile
+librosa==0.10.2.post1
+pyaudio
+dateparser
+
+# --- Data/Utils ---
+numpy
+pandas
+matplotlib
+python-dotenv
+huggingface_hub>=0.24.0
+
+# --- Backend (옵션) ---
+fastapi
+python-socketio[asgi]
+uvicorn
+
+# --- GUI (옵션) ---
+PyQt6
+
+# --- Torch (CUDA 12.8 빌드) ---
+torch==2.5.1+cu128
+torchvision==0.20.1+cu128
+torchaudio==2.5.1+cu128
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+# --- Embedding & Vector DB ---
+sentence-transformers>=3.0.1
+qdrant-client>=1.9.1
+scikit-learn
