@@ -1,0 +1,10 @@
+__pycache__
+*/__pycache__
+
+# 
+deprecated
+
+# 가상환경
+venv
+
+.env
