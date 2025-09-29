@@ -29,12 +29,15 @@ from PySide6.QtWidgets import (
 from ui.survey_wizard import PersonaSurveyWizard
 from ui.chat_dock import ChatDock
 from ui.meeting_notes import MeetingNotesView
+from ui.meeting_settings import MeetingSettingsWidget
 
 from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
 from core.diarization import DiarizationWorker
 from core.summarizer import simple_summarize, extract_actions
 from core.rag_store import RagStore
 from core.adapter import AdapterManager
+from core.speaker import SpeakerManager
+import numpy as np
 
 THEME = {
     "bg": "#e6f5e6",
@@ -67,6 +70,29 @@ class ParticipantDialog(QDialog):
         return self.edit_name.text().strip()
 
 
+class EnrollSpeakerDialog(QDialog):
+    def __init__(self, unnamed_speakers, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("새 화자 등록")
+        layout = QFormLayout(self)
+
+        self.cmb_speaker_id = QComboBox()
+        self.cmb_speaker_id.addItems(unnamed_speakers)
+        layout.addRow("등록할 화자 ID:", self.cmb_speaker_id)
+
+        self.edit_name = QLineEdit()
+        self.edit_name.setPlaceholderText("화자 이름 입력")
+        layout.addRow("이름:", self.edit_name)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(self.buttons)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+
+    def get_data(self):
+        return self.cmb_speaker_id.currentText(), self.edit_name.text().strip()
+
+
 # ---------------- Main window ----------------
 class MeetingConsole(QMainWindow):
     sig_status = Signal(str)
@@ -85,9 +111,12 @@ class MeetingConsole(QMainWindow):
         self.diar_worker = DiarizationWorker(self.state)
         self.diar_worker.sig_status.connect(self.on_status)
         self.diar_worker.sig_diar_done.connect(self.on_diar_done)
+        self.diar_worker.sig_new_speaker.connect(self.on_new_speaker)
 
         self.rag = RagStore()
         self.adapter = AdapterManager()
+        self.speaker_manager = SpeakerManager()
+        self.unnamed_speakers = {}
 
         # tabs
         self.tabs = QTabWidget()
@@ -96,11 +125,12 @@ class MeetingConsole(QMainWindow):
         # self._build_timeline_tab()
         # self._build_qa_tab()
         self._build_action_tab()
-        self._build_settings_tab()
 
         # 회의록 탭 (업로드 → 요약/회의록 저장/복사)
         self.meeting_notes = MeetingNotesView(self)
         self.tabs.addTab(self.meeting_notes, "회의록")
+        
+        self._build_settings_tab()
 
         self._apply_theme()
 
@@ -116,8 +146,8 @@ class MeetingConsole(QMainWindow):
         self.timer.start(1000)
 
         # 설문 마법사(최초 1회)
-        self.survey = PersonaSurveyWizard(parent=self)
-        self.survey.show()
+        # self.survey = PersonaSurveyWizard(parent=self)
+        # self.survey.show()
 
     # ---------------- UI builders ----------------
     def _build_live_tab(self):
@@ -139,10 +169,10 @@ class MeetingConsole(QMainWindow):
 
         # mid bar
         mid = QHBoxLayout()
-        mid.addWidget(QLabel("Forced Speaker:"))
-        self.cmb_forced = QComboBox()
-        self.cmb_forced.addItem("None")
-        mid.addWidget(self.cmb_forced)
+        # mid.addWidget(QLabel("Forced Speaker:"))
+        # self.cmb_forced = QComboBox()
+        # self.cmb_forced.addItem("None")
+        # mid.addWidget(self.cmb_forced)
 
         self.chk_diar = QCheckBox("Auto Diarization (pyannote)")
         self.chk_diar.setChecked(self.state.diarization_enabled)
@@ -178,15 +208,15 @@ class MeetingConsole(QMainWindow):
         self.btn_stop.clicked.connect(self.on_stop)
         self.btn_sum.clicked.connect(self.on_summarize)
         self.btn_add2rag.clicked.connect(self.on_index_to_rag)
-        self.cmb_forced.currentTextChanged.connect(self.on_forced_changed)
+        # self.cmb_forced.currentTextChanged.connect(self.on_forced_changed)
         self.chk_diar.stateChanged.connect(self.on_diar_toggle)
 
-    def _build_timeline_tab(self):
-        self.timeline_root = QWidget()
-        L = QVBoxLayout(self.timeline_root)
-        self.timeline = QListWidget()
-        L.addWidget(self.timeline)
-        self.tabs.addTab(self.timeline_root, "Timeline")
+    # def _build_timeline_tab(self):
+    #     self.timeline_root = QWidget()
+    #     L = QVBoxLayout(self.timeline_root)
+    #     self.timeline = QListWidget()
+    #     L.addWidget(self.timeline)
+    #     self.tabs.addTab(self.timeline_root, "Timeline")
 
     def _build_qa_tab(self):
         root = QWidget()
@@ -258,11 +288,16 @@ class MeetingConsole(QMainWindow):
         self.btn_sched_memo.clicked.connect(self.on_make_schedule)
 
     def _build_settings_tab(self):
-        root = QWidget()
-        F = QFormLayout(root)
+        # 새로운 통합 설정 위젯 생성
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
+
+        # 기존 오디오/시스템 설정
+        system_group = QWidget()
+        F = QFormLayout(system_group)
 
         self.cmb_asr = QComboBox()
-        for m in ["tiny", "base", "small", "medium", "large-v3"]:
+        for m in ["base", "small", "medium", "large-v3"]:
             self.cmb_asr.addItem(m)
         self.cmb_asr.setCurrentText(DEFAULT_MODEL)
 
@@ -276,25 +311,22 @@ class MeetingConsole(QMainWindow):
         self.edit_hf.setPlaceholderText(f"{HF_TOKEN_ENV} (HuggingFace token)")
 
         self.btn_add_participant = QPushButton("참가자 추가")
-        self.cmb_map_id = QComboBox()
-        self.cmb_map_name = QComboBox()
-
-        # preload names
-        for n in ["신현택", "박길실", "조진경"]:
-            self.cmb_map_name.addItem(n)
-            # live 탭 스피커 강제에도 반영
-            if self.cmb_forced.findText(n) < 0:
-                self.cmb_forced.addItem(n)
 
         F.addRow("Whisper Model", self.cmb_asr)
         F.addRow("", self.chk_gpu)
         F.addRow("Auto Diarization", self.chk_diar2)
         F.addRow("HF Token", self.edit_hf)
         F.addRow("", self.btn_add_participant)
-        F.addRow(QLabel("pyannote SpeakerID"), self.cmb_map_id)
-        F.addRow(QLabel("Participant Name"), self.cmb_map_name)
 
-        self.tabs.addTab(root, "Settings")
+        layout.addWidget(QLabel("🔧 시스템 설정"))
+        layout.addWidget(system_group)
+
+        # 회의 설정 및 화자 매핑 위젯
+        self.meeting_settings = MeetingSettingsWidget()
+        self.meeting_settings.speaker_mapping_changed.connect(self.on_speaker_mapping_changed)
+        layout.addWidget(self.meeting_settings)
+
+        self.tabs.addTab(main_widget, "Settings")
 
         self.btn_add_participant.clicked.connect(self.on_add_participant)
         self.chk_diar2.stateChanged.connect(self.on_diar_toggle_settings)
@@ -373,8 +405,8 @@ class MeetingConsole(QMainWindow):
         self.rag.upsert_segments(self.state.live_segments[-50:])
         QMessageBox.information(self, "RAG", "최근 발언을 RAG 인덱싱했습니다.")
 
-    def on_forced_changed(self, text):
-        self.state.forced_speaker_name = None if (text == "None") else text
+    # def on_forced_changed(self, text):
+    #     self.state.forced_speaker_name = None if (text == "None") else text
 
     def on_diar_toggle(self):
         self.state.diarization_enabled = self.chk_diar.isChecked()
@@ -385,19 +417,27 @@ class MeetingConsole(QMainWindow):
         self.chk_diar.setChecked(self.state.diarization_enabled)
 
     def on_add_participant(self):
-        dlg = ParticipantDialog(self)
+        if not self.unnamed_speakers:
+            QMessageBox.information(self, "화자 등록", "새로 감지된 화자가 없습니다.")
+            return
+
+        dlg = EnrollSpeakerDialog(list(self.unnamed_speakers.keys()), self)
         if dlg.exec():
-            name = dlg.get_name()
+            speaker_id, name = dlg.get_data()
             if not name:
+                QMessageBox.warning(self, "오류", "이름을 입력해야 합니다.")
                 return
-            spk_id = f"SPEAKER_{len(self.state.speaker_map):02d}"
-            self.state.speaker_map[spk_id] = name
-            self.cmb_map_id.addItem(spk_id)
-            if self.cmb_forced.findText(name) < 0:
-                self.cmb_forced.addItem(name)
-            if self.cmb_map_name.findText(name) < 0:
-                self.cmb_map_name.addItem(name)
-            QMessageBox.information(self, "등록 완료", f"{spk_id} → {name}")
+
+            embeddings = self.unnamed_speakers.pop(speaker_id, [])
+            if not embeddings:
+                return
+
+            for emb in embeddings:
+                self.speaker_manager.add_speaker_embedding(name, emb)
+            
+            self.state.speaker_map[speaker_id] = name
+            self.on_status(f"New speaker enrolled: {speaker_id} -> {name}")
+            QMessageBox.information(self, "등록 완료", f"{name} 님의 목소리를 등록했습니다.")
 
     def on_make_schedule(self):
         s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm")
@@ -453,24 +493,42 @@ class MeetingConsole(QMainWindow):
         self.state.live_segments.append(seg)
         self.list_chat.addItem(QListWidgetItem(f"[{seg.speaker_name}] {seg.text}"))
         self.list_chat.scrollToBottom()
-        self.timeline.addItem(
-            QListWidgetItem(
-                f"{fmt_time(seg.start)}~{fmt_time(seg.end)} | {seg.speaker_name}: {seg.text}"
-            )
-        )
-        self.timeline.scrollToBottom()
+        # self.timeline.addItem(
+        #     QListWidgetItem(
+        #         f"{fmt_time(seg.start)}~{fmt_time(seg.end)} | {seg.speaker_name}: {seg.text}"
+        #     )
+        # )
+        # self.timeline.scrollToBottom()
         # 🌟 새로 추가: 화자=페르소나 자동 전환
         if getattr(self, "chat_panel", None):
             self.chat_panel.set_active_persona(seg.speaker_name)
 
     def on_diar_done(self, results):
+        """화자 분리 결과 처리 (새로운 speaker_xx 형태 ID로 처리)"""
         self.state.diar_segments = results
-        existing = set(self._combo_items(self.cmb_map_id))
-        for _, _, spk in results:
-            if spk not in existing:
-                self.cmb_map_id.addItem(spk)
-                existing.add(spk)
-        self.on_status(f"Diarization updated ({len(results)} segments).")
+
+        for start, end, speaker_id, confidence in results:
+            # speaker_map에 speaker_id -> display_name 매핑 업데이트
+            display_name = self.diar_worker.get_speaker_manager().get_speaker_display_name(speaker_id)
+            if speaker_id not in self.state.speaker_map:
+                self.state.speaker_map[speaker_id] = display_name
+
+        self.on_status(f"화자 분리 완료: {len(results)}개 구간 처리")
+
+    def on_new_speaker(self, speaker_id: str, display_name: str):
+        """새로운 화자 감지 시 처리"""
+        self.state.speaker_map[speaker_id] = display_name
+        self.on_status(f"새로운 화자 감지: {speaker_id} ({display_name})")
+
+        # 설정 탭의 화자 매핑 테이블 새로고침
+        if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
+            self.meeting_settings.refresh_speaker_mapping()
+
+    def on_speaker_mapping_changed(self, mapping: dict):
+        """화자 매핑이 변경되었을 때 처리"""
+        # state의 speaker_map 업데이트
+        self.state.speaker_map.update(mapping)
+        self.on_status(f"화자 매핑 업데이트: {len(mapping)}개")
 
     def _combo_items(self, combo: QComboBox) -> list[str]:
         return [combo.itemText(i) for i in range(combo.count())]

@@ -41,7 +41,6 @@ class MeetingState:
     actions: List[str] = field(default_factory=list)
     schedule_note: str = ""
     diarization_enabled: bool = False
-    forced_speaker_name: Optional[str] = None
     use_gpu: bool = True
     asr_model: str = "medium"
     raw_audio_path: str = ""
@@ -219,7 +218,7 @@ class AudioWorker(QObject):
     # ====== Speaker mapping (approx) ======
     def _infer_speaker_id(self, s: float, e: float) -> str:
         overlaps = [
-            spk for (ds, de, spk) in self.state.diar_segments if not (e < ds or s > de)
+            spk for (ds, de, spk, _) in self.state.diar_segments if not (e < ds or s > de)
         ]
         if not overlaps:
             return "Unknown"
@@ -227,6 +226,7 @@ class AudioWorker(QObject):
 
     # ====== STT loop ======
     def _chunk_loop(self):
+        chunk_offset_seconds = 0.0
         while not self._stop.is_set():
             wav_bytes = self._pull_chunk_wav()
             if wav_bytes is None:
@@ -246,16 +246,16 @@ class AudioWorker(QObject):
                 )
                 for s in segments:
                     seg = Segment(
-                        start=s.start, end=s.end, text=(s.text or "").strip()
+                        start=chunk_offset_seconds + s.start,
+                        end=chunk_offset_seconds + s.end,
+                        text=(s.text or "").strip(),
                     )
-                    if self.state.forced_speaker_name:
-                        seg.speaker_name = self.state.forced_speaker_name
-                        seg.speaker_id = "FORCED"
-                    else:
-                        spk_id = self._infer_speaker_id(seg.start, seg.end)
-                        seg.speaker_id = spk_id
-                        seg.speaker_name = self.state.speaker_map.get(spk_id, spk_id)
+                    spk_id = self._infer_speaker_id(seg.start, seg.end)
+                    seg.speaker_id = spk_id
+                    seg.speaker_name = self.state.speaker_map.get(spk_id, spk_id)
                     self.sig_transcript.emit(seg)
+
+                chunk_offset_seconds += CHUNK_SECONDS
 
             except Exception as e:
                 self.sig_status.emit(f"STT error: {e}")

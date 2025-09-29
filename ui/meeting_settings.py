@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QTextEdit, QHBoxLayout, QCheckBox,
-    QPushButton, QGridLayout, QButtonGroup, QScrollArea, QMessageBox
+    QPushButton, QGridLayout, QButtonGroup, QScrollArea, QMessageBox, QTableWidget,
+    QTableWidgetItem, QHeaderView, QTabWidget, QGroupBox, QFormLayout
 )
 from PySide6.QtCore import Qt, Signal
+from core.speaker import SpeakerManager
 
 TEMPLATES = [
     ("일반 회의", "general"),
@@ -21,14 +23,96 @@ GLOSSARY_PRESETS = [
     ("인프라 용어집", "infra"),
 ]
 
+class SpeakerMappingWidget(QWidget):
+    """화자 매핑 관리 위젯"""
+    mapping_changed = Signal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.speaker_manager = SpeakerManager()
+        self.init_ui()
+        self.load_speakers()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+
+        # 제목
+        layout.addWidget(QLabel("🎤 화자 매핑 관리"))
+
+        # 테이블
+        self.speaker_table = QTableWidget()
+        self.speaker_table.setColumnCount(4)
+        self.speaker_table.setHorizontalHeaderLabels(["화자 ID", "표시 이름", "임베딩 수", "액션"])
+
+        # 테이블 헤더 설정
+        header = self.speaker_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+
+        layout.addWidget(self.speaker_table)
+
+        # 새로고침 버튼
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("새로고침")
+        self.btn_refresh.clicked.connect(self.load_speakers)
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+    def load_speakers(self):
+        """화자 목록 로드 및 테이블 업데이트"""
+        speakers = self.speaker_manager.get_all_speakers()
+        self.speaker_table.setRowCount(len(speakers))
+
+        for row, (speaker_id, display_name, embedding_count) in enumerate(speakers):
+            # 화자 ID (읽기 전용)
+            id_item = QTableWidgetItem(speaker_id)
+            id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.speaker_table.setItem(row, 0, id_item)
+
+            # 표시 이름 (편집 가능)
+            name_item = QTableWidgetItem(display_name)
+            self.speaker_table.setItem(row, 1, name_item)
+
+            # 임베딩 수 (읽기 전용)
+            count_item = QTableWidgetItem(str(embedding_count))
+            count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.speaker_table.setItem(row, 2, count_item)
+
+            # 저장 버튼
+            save_btn = QPushButton("저장")
+            save_btn.clicked.connect(lambda checked, r=row: self.save_speaker_name(r))
+            self.speaker_table.setCellWidget(row, 3, save_btn)
+
+    def save_speaker_name(self, row):
+        """화자 이름 저장"""
+        speaker_id = self.speaker_table.item(row, 0).text()
+        new_name = self.speaker_table.item(row, 1).text().strip()
+
+        if not new_name:
+            QMessageBox.warning(self, "경고", "화자 이름을 입력해주세요.")
+            return
+
+        if self.speaker_manager.update_speaker_name(speaker_id, new_name):
+            QMessageBox.information(self, "성공", f"화자 '{speaker_id}'의 이름이 '{new_name}'으로 변경되었습니다.")
+            self.mapping_changed.emit(self.speaker_manager.speaker_mapping)
+        else:
+            QMessageBox.warning(self, "오류", f"화자 '{speaker_id}' 업데이트에 실패했습니다.")
+
+    def get_speaker_mapping(self) -> dict:
+        """현재 화자 매핑 반환"""
+        return self.speaker_manager.speaker_mapping
+
 class MeetingSettingsWidget(QWidget):
     """
-    - 참석자(쉼표로 구분)
-    - 추가 컨텍스트(회의 목적/안건 등)
-    - 템플릿 선택(라디오형 버튼)
-    - 용어집(사전) 선택 + 커스텀 용어
+    회의 설정 및 화자 매핑 관리를 위한 탭 기반 위젯
+    - 회의 설정: 참석자, 컨텍스트, 템플릿, 용어집
+    - 화자 매핑: 화자 ID와 실제 이름 매핑 관리
     """
     settings_changed = Signal(dict)
+    speaker_mapping_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,7 +124,38 @@ class MeetingSettingsWidget(QWidget):
             "custom_glossary": "",
         }
 
+        self.init_ui()
+
+    def init_ui(self):
         root = QVBoxLayout(self)
+
+        # 탭 위젯 생성
+        self.tab_widget = QTabWidget()
+        root.addWidget(self.tab_widget)
+
+        # 회의 설정 탭
+        self.meeting_tab = self.create_meeting_settings_tab()
+        self.tab_widget.addTab(self.meeting_tab, "회의 설정")
+
+        # 화자 매핑 탭
+        self.speaker_tab = SpeakerMappingWidget()
+        self.speaker_tab.mapping_changed.connect(self.speaker_mapping_changed.emit)
+        self.tab_widget.addTab(self.speaker_tab, "화자 매핑")
+
+        # 심플 스타일
+        self.setStyleSheet("""
+            QLabel { font-weight: 600; }
+            QLineEdit, QTextEdit { border:1px solid #E5E7EB; border-radius:8px; padding:6px; }
+            QPushButton[checkable="true"] { border:1px solid #E5E7EB; border-radius:10px; padding:8px; }
+            QPushButton[checkable="true"]:checked { background:#EEF2FF; border-color:#6366F1; }
+            QTableWidget { border:1px solid #E5E7EB; border-radius:8px; }
+            QTabWidget::pane { border:1px solid #E5E7EB; border-radius:8px; }
+        """)
+
+    def create_meeting_settings_tab(self):
+        """회의 설정 탭 생성"""
+        widget = QWidget()
+        root = QVBoxLayout(widget)
         root.setSpacing(12)
 
         # 참석자
@@ -97,13 +212,7 @@ class MeetingSettingsWidget(QWidget):
 
         self.btn_apply.clicked.connect(self._on_apply)
 
-        # 심플 스타일
-        self.setStyleSheet("""
-            QLabel { font-weight: 600; }
-            QLineEdit, QTextEdit { border:1px solid #E5E7EB; border-radius:8px; padding:6px; }
-            QPushButton[checkable="true"] { border:1px solid #E5E7EB; border-radius:10px; padding:8px; }
-            QPushButton[checkable="true"]:checked { background:#EEF2FF; border-color:#6366F1; }
-        """)
+        return widget
 
     def _on_apply(self):
         tpl_key = None
@@ -141,3 +250,11 @@ class MeetingSettingsWidget(QWidget):
             cb.setChecked(cb.property("glossary_key") in set(s.get("glossaries", [])))
         self.custom_gloss.setText(s.get("custom_glossary", ""))
         self._settings.update(self.get_settings())
+
+    def refresh_speaker_mapping(self):
+        """화자 매핑 탭 새로고침"""
+        self.speaker_tab.load_speakers()
+
+    def get_speaker_mapping(self) -> dict:
+        """현재 화자 매핑 딕셔너리 반환"""
+        return self.speaker_tab.get_speaker_mapping()
