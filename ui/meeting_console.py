@@ -73,7 +73,7 @@ class MeetingConsole(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Persona-AI 실시간 회의 비서 (PyQt)")
+        self.setWindowTitle("Persona-AI 실시간 회의 보조 서비스")
         self.resize(1280, 860)
 
         # state / workers
@@ -93,8 +93,8 @@ class MeetingConsole(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
         self._build_live_tab()
-        self._build_timeline_tab()
-        self._build_qa_tab()
+        # self._build_timeline_tab()
+        # self._build_qa_tab()
         self._build_action_tab()
         self._build_settings_tab()
 
