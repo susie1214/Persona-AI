@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # ui/meeting_console.py
-import os, datetime
+import os, datetime, json
 from PySide6.QtCore import Qt, QTimer, Signal, QDateTime
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -47,6 +47,7 @@ THEME = {
     "btn_hover": "#ffdb4d",
     "btn_border": "#cccc99",
 }
+
 HF_TOKEN_ENV = "HF_TOKEN"
 DEFAULT_MODEL = "medium"
 
@@ -107,6 +108,7 @@ class MeetingConsole(QMainWindow):
         self.audio_worker = AudioWorker(self.state)
         self.audio_worker.sig_transcript.connect(self.on_segment)
         self.audio_worker.sig_status.connect(self.on_status)
+        self.audio_worker.sig_new_speaker_detected.connect(self.on_new_speaker_auto_assigned)
 
         self.diar_worker = DiarizationWorker(self.state)
         self.diar_worker.sig_status.connect(self.on_status)
@@ -128,14 +130,14 @@ class MeetingConsole(QMainWindow):
 
         # 회의록 탭 (업로드 → 요약/회의록 저장/복사)
         self.meeting_notes = MeetingNotesView(self)
-        self.tabs.addTab(self.meeting_notes, "회의록")
+        self.tabs.addTab(self.meeting_notes, "Minutes")
         
         self._build_settings_tab()
 
         self._apply_theme()
 
         # 우측 개인 챗봇 도크
-        self.chat_dock = QDockWidget("Personal Chatbot", self)
+        self.chat_dock = QDockWidget("Persona Chatbot", self)
         self.chat_panel = ChatDock()
         self.chat_dock.setWidget(self.chat_panel)
         self.addDockWidget(Qt.RightDockWidgetArea, self.chat_dock)
@@ -209,7 +211,7 @@ class MeetingConsole(QMainWindow):
         self.btn_sum.clicked.connect(self.on_summarize)
         self.btn_add2rag.clicked.connect(self.on_index_to_rag)
         # self.cmb_forced.currentTextChanged.connect(self.on_forced_changed)
-        self.chk_diar.stateChanged.connect(self.on_diar_toggle)
+        # self.chk_diar.stateChanged.connect(self.on_diar_toggle)
 
     # def _build_timeline_tab(self):
     #     self.timeline_root = QWidget()
@@ -284,7 +286,7 @@ class MeetingConsole(QMainWindow):
         self.txt_sched = QTextEdit()
         L.addWidget(self.txt_sched)
 
-        self.tabs.addTab(root, "Action & Schedule")
+        self.tabs.addTab(root, "Schedule")
         self.btn_sched_memo.clicked.connect(self.on_make_schedule)
 
     def _build_settings_tab(self):
@@ -311,12 +313,20 @@ class MeetingConsole(QMainWindow):
         self.edit_hf.setPlaceholderText(f"{HF_TOKEN_ENV} (HuggingFace token)")
 
         self.btn_add_participant = QPushButton("참가자 추가")
+        self.btn_save_speakers = QPushButton("화자 정보 저장")
+        self.btn_load_speakers = QPushButton("화자 정보 로드")
 
         F.addRow("Whisper Model", self.cmb_asr)
         F.addRow("", self.chk_gpu)
         F.addRow("Auto Diarization", self.chk_diar2)
         F.addRow("HF Token", self.edit_hf)
         F.addRow("", self.btn_add_participant)
+
+        # 화자 관리 버튼들을 가로로 배치
+        speaker_buttons = QHBoxLayout()
+        speaker_buttons.addWidget(self.btn_save_speakers)
+        speaker_buttons.addWidget(self.btn_load_speakers)
+        F.addRow("화자 관리:", speaker_buttons)
 
         layout.addWidget(QLabel("🔧 시스템 설정"))
         layout.addWidget(system_group)
@@ -329,6 +339,8 @@ class MeetingConsole(QMainWindow):
         self.tabs.addTab(main_widget, "Settings")
 
         self.btn_add_participant.clicked.connect(self.on_add_participant)
+        self.btn_save_speakers.clicked.connect(self.save_speaker_mapping)
+        self.btn_load_speakers.clicked.connect(self.load_speaker_mapping)
         self.chk_diar2.stateChanged.connect(self.on_diar_toggle_settings)
 
     def _apply_theme(self):
@@ -377,6 +389,7 @@ class MeetingConsole(QMainWindow):
 
         if self.state.diarization_enabled:
             self.diar_worker.start()
+            self.on_status("화자 분리(Diarization) 활성화 - 대화 겹침 자동 감지")
 
         self.on_status("Started.")
 
@@ -451,6 +464,49 @@ class MeetingConsole(QMainWindow):
         self.txt_sched.setText(memo)
         QMessageBox.information(self, "메모 생성", "다음 회의 메모를 작성했습니다.")
 
+    def save_speaker_mapping(self):
+        """화자 매핑 정보를 JSON 파일로 저장"""
+        try:
+            speaker_data = {
+                "speaker_map": self.state.speaker_map,
+                "speaker_counter": self.state.speaker_counter,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+
+            with open("speaker_mapping.json", "w", encoding="utf-8") as f:
+                json.dump(speaker_data, f, ensure_ascii=False, indent=2)
+
+            self.on_status("화자 매핑 정보 저장 완료: speaker_mapping.json")
+            QMessageBox.information(self, "저장 완료", "화자 매핑 정보가 저장되었습니다.")
+        except Exception as e:
+            self.on_status(f"화자 매핑 저장 실패: {e}")
+            QMessageBox.warning(self, "저장 실패", f"화자 매핑 저장 중 오류가 발생했습니다:\n{e}")
+
+    def load_speaker_mapping(self):
+        """JSON 파일에서 화자 매핑 정보를 로드"""
+        try:
+            if not os.path.exists("speaker_mapping.json"):
+                QMessageBox.information(self, "파일 없음", "저장된 화자 매핑 파일이 없습니다.")
+                return
+
+            with open("speaker_mapping.json", "r", encoding="utf-8") as f:
+                speaker_data = json.load(f)
+
+            self.state.speaker_map = speaker_data.get("speaker_map", {})
+            self.state.speaker_counter = speaker_data.get("speaker_counter", 0)
+
+            self.on_status(f"화자 매핑 정보 로드 완료: {len(self.state.speaker_map)}개 화자")
+            QMessageBox.information(self, "로드 완료",
+                f"화자 매핑 정보가 로드되었습니다.\n화자 수: {len(self.state.speaker_map)}개")
+
+            # 설정 탭의 화자 매핑 테이블 새로고침
+            if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
+                self.meeting_settings.refresh_speaker_mapping()
+
+        except Exception as e:
+            self.on_status(f"화자 매핑 로드 실패: {e}")
+            QMessageBox.warning(self, "로드 실패", f"화자 매핑 로드 중 오류가 발생했습니다:\n{e}")
+
     def on_answer(self):
         q = self.edit_q.text().strip()
         if not q:
@@ -524,6 +580,14 @@ class MeetingConsole(QMainWindow):
         if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
             self.meeting_settings.refresh_speaker_mapping()
 
+    def on_new_speaker_auto_assigned(self, speaker_name: str):
+        """새로운 화자가 자동으로 할당되었을 때 처리"""
+        self.on_status(f"새 화자 자동 할당: {speaker_name}")
+
+        # 설정 탭의 화자 매핑 테이블 새로고침
+        if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
+            self.meeting_settings.refresh_speaker_mapping()
+
     def on_speaker_mapping_changed(self, mapping: dict):
         """화자 매핑이 변경되었을 때 처리"""
         # state의 speaker_map 업데이트
@@ -534,4 +598,25 @@ class MeetingConsole(QMainWindow):
         return [combo.itemText(i) for i in range(combo.count())]
 
     def _refresh_preview(self):
-        self.txt_preview.setPlainText(simple_summarize(self.state.live_segments))
+        # 화자 정보가 포함된 미리보기 생성
+        if not self.state.live_segments:
+            self.txt_preview.setPlainText("실시간 대화 내용이 여기에 표시됩니다.")
+            return
+
+        # 최근 10개 발언만 표시하되 화자 정보 확실히 포함
+        recent_segments = self.state.live_segments[-10:]
+        preview_lines = []
+
+        for seg in recent_segments:
+            if seg.text.strip():
+                # speaker_XX 형태 그대로 표시
+                speaker_display = seg.speaker_name
+                if speaker_display == "Unknown":
+                    speaker_display = "speaker_00"
+
+                preview_lines.append(f"[{speaker_display}] {seg.text}")
+
+        if preview_lines:
+            self.txt_preview.setPlainText("\n".join(preview_lines))
+        else:
+            self.txt_preview.setPlainText("대화 내용을 분석 중입니다...")

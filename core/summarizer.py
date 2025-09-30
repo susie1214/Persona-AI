@@ -25,7 +25,16 @@ ACTION_VERBS = [
 
 
 def simple_summarize(segments: List[Segment], max_len=10) -> str:
-    lines = [f"[{s.speaker_name}] {s.text}" for s in segments if s.text]
+    lines = []
+    for s in segments:
+        if s.text.strip():
+            # speaker_XX 형태 그대로 표시
+            speaker_display = s.speaker_name
+            if speaker_display == "Unknown":
+                speaker_display = "speaker_00"
+
+            lines.append(f"[{speaker_display}] {s.text}")
+
     return "\n".join(lines[-max_len:]) if lines else "요약할 내용이 없습니다."
 
 
