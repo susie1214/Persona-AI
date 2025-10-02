@@ -63,7 +63,12 @@ class SpeakerMappingWidget(QWidget):
 
     def load_speakers(self):
         """화자 목록 로드 및 테이블 업데이트"""
+        # 파일에서 최신 데이터 다시 로드
+        self.speaker_manager.load_speakers()
+        self.speaker_manager.load_speaker_mapping()
+
         speakers = self.speaker_manager.get_all_speakers()
+        print(f"[DEBUG] on setting loading speakers : {speakers}")
         self.speaker_table.setRowCount(len(speakers))
 
         for row, (speaker_id, display_name, embedding_count) in enumerate(speakers):

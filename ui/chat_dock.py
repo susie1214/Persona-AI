@@ -68,11 +68,11 @@ class ChatDock(QWidget):
 
         self.btn.clicked.connect(self.on_send)
 
-        # 초기 상태
-        if names and names[0] != "(없음)":
-            self.set_active_persona(names[0])
-        else:
-            self.set_active_persona(None)
+        # # 초기 상태
+        # if names and names[0] != "(없음)":
+        #     self.set_active_persona(names[0])
+        # else:
+        #     self.set_active_persona(None)
 
     # 외부(회의 Live 탭)에서 발화자에 맞게 호출
     def set_active_persona(self, name: str | None):
@@ -89,7 +89,8 @@ class ChatDock(QWidget):
 
     def on_persona_changed(self, name: str):
         if name == "(없음)":
-            name = None
+            name = "미지정"
+            
         self.set_active_persona(name)
 
     def on_send(self):

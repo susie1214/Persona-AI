@@ -48,8 +48,10 @@ class SpeakerManager:
                 self.speakers = pickle.load(f)
             print(f"Loaded {len(self.speakers)} speaker profiles.")
         except FileNotFoundError:
+            self.speakers = []
             print("Speaker profiles file not found. Starting fresh.")
         except Exception as e:
+            self.speakers = []
             print(f"Error loading speaker profiles: {e}")
 
     def save_speakers(self):
@@ -68,6 +70,20 @@ class SpeakerManager:
                     data = json.load(f)
                     self.speaker_mapping = data.get("mapping", {})
                     self.next_speaker_id = data.get("next_id", 1)
+
+                    # speaker_mapping에는 있지만 speakers 리스트에 없는 화자 생성
+                    existing_ids = {s.speaker_id for s in self.speakers}
+                    for speaker_id, display_name in self.speaker_mapping.items():
+                        if speaker_id not in existing_ids:
+                            new_speaker = Speaker(
+                                speaker_id=speaker_id,
+                                display_name=display_name,
+                                embeddings=[],
+                                confidence_scores=[]
+                            )
+                            self.speakers.append(new_speaker)
+                            print(f"Created speaker from mapping: {speaker_id} ({display_name})")
+
             print(f"Loaded speaker mapping: {len(self.speaker_mapping)} mappings")
         except Exception as e:
             print(f"Error loading speaker mapping: {e}")
@@ -138,7 +154,7 @@ class SpeakerManager:
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         return np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
 
-    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.75) -> tuple[str, float]:
+    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.65) -> tuple[str, float]:
         """화자 식별 또는 새 화자 생성
 
         Returns:

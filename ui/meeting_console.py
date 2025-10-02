@@ -556,8 +556,8 @@ class MeetingConsole(QMainWindow):
         # )
         # self.timeline.scrollToBottom()
         # 🌟 새로 추가: 화자=페르소나 자동 전환
-        if getattr(self, "chat_panel", None):
-            self.chat_panel.set_active_persona(seg.speaker_name)
+        # if getattr(self, "chat_panel", None):
+        #     self.chat_panel.set_active_persona(seg.speaker_name)
 
     def on_diar_done(self, results):
         """화자 분리 결과 처리 (새로운 speaker_xx 형태 ID로 처리)"""
