@@ -18,13 +18,14 @@ class DiarizationWorker(QObject):
     sig_diar_done = Signal(list)  # list[(start,end,speaker_id,confidence)]
     sig_new_speaker = Signal(str, str)  # (speaker_id, display_name)
 
-    def __init__(self, state, interval_sec=30):
+    def __init__(self, state, speaker_manager=None, interval_sec=30):
         super().__init__()
         self.state = state
         self.interval = interval_sec
         self._stop = threading.Event()
         self._thr = None
-        self.speaker_manager = SpeakerManager()
+        # SpeakerManager 공유 (없으면 새로 생성)
+        self.speaker_manager = speaker_manager if speaker_manager else SpeakerManager()
 
     def start(self):
         if not self.state.diarization_enabled:
@@ -77,7 +78,7 @@ class DiarizationWorker(QObject):
                             embedding = np.mean(embedding, axis=0)
 
                             # 화자 식별 또는 새 화자 생성
-                            speaker_id, confidence = self.speaker_manager.identify_speaker(embedding)
+                            speaker_id, confidence = self.speaker_manager.identify_speaker(embedding, 0.72)
                             display_name = self.speaker_manager.get_speaker_display_name(speaker_id)
 
                             # 새로운 화자인 경우 신호 발송

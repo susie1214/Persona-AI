@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # ui/meeting_console.py
-import os, datetime, json
+import os, datetime, json, time
 from PySide6.QtCore import Qt, QTimer, Signal, QDateTime
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -105,20 +105,29 @@ class MeetingConsole(QMainWindow):
 
         # state / workers
         self.state = MeetingState()
-        self.audio_worker = AudioWorker(self.state)
+
+        # SpeakerManager를 먼저 생성 (모든 컴포넌트가 공유)
+        self.speaker_manager = SpeakerManager()
+
+        # AudioWorker에 SpeakerManager 전달
+        self.audio_worker = AudioWorker(self.state, speaker_manager=self.speaker_manager)
         self.audio_worker.sig_transcript.connect(self.on_segment)
         self.audio_worker.sig_status.connect(self.on_status)
         self.audio_worker.sig_new_speaker_detected.connect(self.on_new_speaker_auto_assigned)
 
-        self.diar_worker = DiarizationWorker(self.state)
+        # DiarizationWorker도 같은 SpeakerManager 공유
+        self.diar_worker = DiarizationWorker(self.state, speaker_manager=self.speaker_manager)
         self.diar_worker.sig_status.connect(self.on_status)
         self.diar_worker.sig_diar_done.connect(self.on_diar_done)
         self.diar_worker.sig_new_speaker.connect(self.on_new_speaker)
 
         self.rag = RagStore()
         self.adapter = AdapterManager()
-        self.speaker_manager = SpeakerManager()
         self.unnamed_speakers = {}
+
+        # 녹음 상태
+        self.recording = False
+        self.recording_start_time = None
 
         # tabs
         self.tabs = QTabWidget()
@@ -158,8 +167,8 @@ class MeetingConsole(QMainWindow):
 
         # top bar
         bar = QHBoxLayout()
-        self.btn_start = QPushButton("Start")
-        self.btn_stop = QPushButton("Stop")
+        self.btn_start = QPushButton("Start Recording")
+        self.btn_stop = QPushButton("Stop Recording")
         self.btn_sum = QPushButton("Summarize")
         self.btn_add2rag = QPushButton("Index to RAG")
         bar.addWidget(self.btn_start)
@@ -199,6 +208,12 @@ class MeetingConsole(QMainWindow):
         self.txt_preview = QPlainTextEdit()
         self.txt_preview.setReadOnly(True)
         Rv.addWidget(self.txt_preview)
+
+        # 녹음 상태 표시
+        self.lbl_record_status = QLabel("녹음 중지됨")
+        self.lbl_record_status.setStyleSheet("color: gray; font-weight: bold;")
+        Rv.addWidget(self.lbl_record_status)
+
         splitter.addWidget(right)
         splitter.setSizes([900, 380])
         L.addWidget(splitter)
@@ -331,8 +346,8 @@ class MeetingConsole(QMainWindow):
         layout.addWidget(QLabel("🔧 시스템 설정"))
         layout.addWidget(system_group)
 
-        # 회의 설정 및 화자 매핑 위젯
-        self.meeting_settings = MeetingSettingsWidget()
+        # 회의 설정 및 화자 매핑 위젯 (speaker_manager 공유)
+        self.meeting_settings = MeetingSettingsWidget(speaker_manager=self.speaker_manager)
         self.meeting_settings.speaker_mapping_changed.connect(self.on_speaker_mapping_changed)
         layout.addWidget(self.meeting_settings)
 
@@ -391,15 +406,55 @@ class MeetingConsole(QMainWindow):
             self.diar_worker.start()
             self.on_status("화자 분리(Diarization) 활성화 - 대화 겹침 자동 감지")
 
-        self.on_status("Started.")
+        # 녹음 자동 시작
+        os.makedirs("output/recordings", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        recording_path = f"output/recordings/meeting_{timestamp}.wav"
+
+        self.audio_worker.start_recording(recording_path)
+        self.recording = True
+        self.recording_start_time = time.time()
+
+        # UI 업데이트
+        self.lbl_record_status.setText(f"🔴 녹음 중: {recording_path}")
+        self.lbl_record_status.setStyleSheet("color: red; font-weight: bold;")
+
+        self.on_status(f"Started. 녹음 시작: {recording_path}")
 
     def on_stop(self):
+        # 녹음 중지 및 파일 저장
+        saved_path = None
+        if self.recording:
+            saved_path = self.audio_worker.stop_recording()
+            self.recording = False
+
+            # 녹음 시간 계산
+            if self.recording_start_time:
+                duration = time.time() - self.recording_start_time
+                duration_str = fmt_time(duration)
+            else:
+                duration_str = "00:00"
+
+            # UI 업데이트
+            self.lbl_record_status.setText(f"녹음 완료 (시간: {duration_str})")
+            self.lbl_record_status.setStyleSheet("color: green; font-weight: bold;")
+
+        # 오디오 캡처 중지
         try:
             self.audio_worker.stop()
             self.diar_worker.stop()
         except Exception:
             pass
-        self.on_status("Stopped.")
+
+        # 녹음 결과 메시지
+        if saved_path:
+            duration = time.time() - self.recording_start_time if self.recording_start_time else 0
+            duration_str = fmt_time(duration)
+            self.on_status(f"Stopped. 녹음 저장 완료: {saved_path} (시간: {duration_str})")
+            QMessageBox.information(self, "녹음 완료",
+                f"녹음이 저장되었습니다.\n\n파일: {saved_path}\n시간: {duration_str}")
+        else:
+            self.on_status("Stopped.")
 
     def on_summarize(self):
         self.state.summary = simple_summarize(self.state.live_segments, max_len=12)
@@ -582,17 +637,58 @@ class MeetingConsole(QMainWindow):
 
     def on_new_speaker_auto_assigned(self, speaker_name: str):
         """새로운 화자가 자동으로 할당되었을 때 처리"""
+        print(f"[DEBUG] on_new_speaker_auto_assigned called with: {speaker_name}")
         self.on_status(f"새 화자 자동 할당: {speaker_name}")
+
+        # SpeakerManager에 화자 추가 (임베딩 없이 ID만 등록)
+        if speaker_name not in self.speaker_manager.speaker_mapping:
+            print(f"[DEBUG] Adding new speaker to SpeakerManager: {speaker_name}")
+            # Speaker 객체 생성 (임베딩은 나중에 추가될 수 있음)
+            from core.speaker import Speaker
+            new_speaker = Speaker(
+                speaker_id=speaker_name,
+                display_name=speaker_name,
+                embeddings=[],
+                confidence_scores=[]
+            )
+            self.speaker_manager.speakers.append(new_speaker)
+            self.speaker_manager.speaker_mapping[speaker_name] = speaker_name
+
+            # 다음 ID 업데이트 (speaker_XX 형태에서 숫자 추출)
+            try:
+                if speaker_name.startswith("speaker_"):
+                    speaker_num = int(speaker_name.split("_")[1])
+                    if speaker_num >= self.speaker_manager.next_speaker_id:
+                        self.speaker_manager.next_speaker_id = speaker_num + 1
+            except:
+                pass
+
+            # 저장
+            self.speaker_manager.save_speakers()
+            self.speaker_manager.save_speaker_mapping()
+            print(f"[DEBUG] Speaker saved. Total speakers: {len(self.speaker_manager.speakers)}")
+        else:
+            print(f"[DEBUG] Speaker {speaker_name} already exists in mapping")
 
         # 설정 탭의 화자 매핑 테이블 새로고침
         if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
+            print(f"[DEBUG] Refreshing speaker mapping table")
             self.meeting_settings.refresh_speaker_mapping()
+        else:
+            print(f"[DEBUG] Cannot refresh speaker mapping - meeting_settings not ready")
 
     def on_speaker_mapping_changed(self, mapping: dict):
         """화자 매핑이 변경되었을 때 처리"""
         # state의 speaker_map 업데이트
         self.state.speaker_map.update(mapping)
-        self.on_status(f"화자 매핑 업데이트: {len(mapping)}개")
+
+        # 리셋된 경우 (빈 딕셔너리)
+        if not mapping:
+            self.state.speaker_map = {}
+            self.state.speaker_counter = 0
+            self.on_status("화자 매핑이 초기화되었습니다.")
+        else:
+            self.on_status(f"화자 매핑 업데이트: {len(mapping)}개")
 
     def _combo_items(self, combo: QComboBox) -> list[str]:
         return [combo.itemText(i) for i in range(combo.count())]

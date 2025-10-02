@@ -27,9 +27,9 @@ class SpeakerMappingWidget(QWidget):
     """화자 매핑 관리 위젯"""
     mapping_changed = Signal(dict)
 
-    def __init__(self, parent=None):
+    def __init__(self, speaker_manager=None, parent=None):
         super().__init__(parent)
-        self.speaker_manager = SpeakerManager()
+        self.speaker_manager = speaker_manager if speaker_manager else SpeakerManager()
         self.init_ui()
         self.load_speakers()
 
@@ -53,11 +53,17 @@ class SpeakerMappingWidget(QWidget):
 
         layout.addWidget(self.speaker_table)
 
-        # 새로고침 버튼
+        # 버튼 레이아웃
         btn_layout = QHBoxLayout()
-        self.btn_refresh = QPushButton("새로고침")
+        self.btn_refresh = QPushButton("🔄 새로고침")
         self.btn_refresh.clicked.connect(self.load_speakers)
         btn_layout.addWidget(self.btn_refresh)
+
+        self.btn_reset = QPushButton("🗑️ 화자 전체 삭제")
+        self.btn_reset.setStyleSheet("background-color: #fee2e2; color: #991b1b;")
+        self.btn_reset.clicked.connect(self.reset_speakers)
+        btn_layout.addWidget(self.btn_reset)
+
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -110,6 +116,25 @@ class SpeakerMappingWidget(QWidget):
         """현재 화자 매핑 반환"""
         return self.speaker_manager.speaker_mapping
 
+    def reset_speakers(self):
+        """모든 화자 정보 초기화"""
+        # 확인 다이얼로그
+        reply = QMessageBox.question(
+            self,
+            "화자 전체 삭제",
+            "모든 화자 정보를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            if self.speaker_manager.reset_all_speakers():
+                self.load_speakers()
+                self.mapping_changed.emit({})
+                QMessageBox.information(self, "완료", "모든 화자 정보가 삭제되었습니다.")
+            else:
+                QMessageBox.warning(self, "오류", "화자 정보 삭제 중 오류가 발생했습니다.")
+
 class MeetingSettingsWidget(QWidget):
     """
     회의 설정 및 화자 매핑 관리를 위한 탭 기반 위젯
@@ -119,7 +144,7 @@ class MeetingSettingsWidget(QWidget):
     settings_changed = Signal(dict)
     speaker_mapping_changed = Signal(dict)
 
-    def __init__(self, parent=None):
+    def __init__(self, speaker_manager=None, parent=None):
         super().__init__(parent)
         self._settings = {
             "attendees": [],
@@ -128,6 +153,7 @@ class MeetingSettingsWidget(QWidget):
             "glossaries": [],
             "custom_glossary": "",
         }
+        self._speaker_manager = speaker_manager
 
         self.init_ui()
 
@@ -142,8 +168,8 @@ class MeetingSettingsWidget(QWidget):
         self.meeting_tab = self.create_meeting_settings_tab()
         self.tab_widget.addTab(self.meeting_tab, "회의 설정")
 
-        # 화자 매핑 탭
-        self.speaker_tab = SpeakerMappingWidget()
+        # 화자 매핑 탭 (외부에서 주입받은 speaker_manager 사용)
+        self.speaker_tab = SpeakerMappingWidget(speaker_manager=self._speaker_manager)
         self.speaker_tab.mapping_changed.connect(self.speaker_mapping_changed.emit)
         self.tab_widget.addTab(self.speaker_tab, "화자 매핑")
 

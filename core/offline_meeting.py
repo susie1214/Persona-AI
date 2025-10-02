@@ -110,7 +110,7 @@ def _md_from_segments(title: str, segs: List[Dict]) -> Dict[str, str]:
 
 def _match_speakers_by_overlap(whisper_segments, diar_annotation) -> List[Dict]:
     """
-    whisper_segments: iterable of objects with .start, .end, .text
+    whisper_segments: iterable of objects with .start, .end, .text (또는 dict)
     diar_annotation: pyannote Annotation
     return list of dicts: {speaker, text, start, end}
     """
@@ -120,7 +120,16 @@ def _match_speakers_by_overlap(whisper_segments, diar_annotation) -> List[Dict]:
         list(diar_annotation.itertracks(yield_label=True)) if diar_annotation else []
     )
     for ws in whisper_segments:
-        w_start, w_end = float(ws.start or 0.0), float(ws.end or 0.0)
+        # dict와 object 모두 지원
+        if isinstance(ws, dict):
+            w_start = float(ws.get("start", 0.0))
+            w_end = float(ws.get("end", 0.0))
+            w_text = ws.get("text", "").strip()
+        else:
+            w_start = float(ws.start or 0.0)
+            w_end = float(ws.end or 0.0)
+            w_text = (ws.text or "").strip()
+
         speaker = "Unknown"
         # 가장 많이 겹치는 turn을 선택
         best_overlap = 0.0
@@ -136,7 +145,7 @@ def _match_speakers_by_overlap(whisper_segments, diar_annotation) -> List[Dict]:
         out.append(
             {
                 "speaker": speaker,
-                "text": (ws.text or "").strip(),
+                "text": w_text,
                 "start": w_start,
                 "end": w_end,
             }
@@ -181,6 +190,15 @@ def process_audio_file(
 
     seg_list = list(segments)  # generator → list
 
+    # 디버그: 첫 번째 segment 타입 확인
+    if seg_list:
+        print(f"[DEBUG] First segment type: {type(seg_list[0])}")
+        print(f"[DEBUG] First segment: {seg_list[0]}")
+        if isinstance(seg_list[0], dict):
+            print(f"[DEBUG] Segment is dict with keys: {seg_list[0].keys()}")
+        else:
+            print(f"[DEBUG] Segment attributes: {dir(seg_list[0])}")
+
     # 2) (optional) Diarization
     diar_annotation = None
     if diarize:
@@ -203,15 +221,23 @@ def process_audio_file(
     if diar_annotation is not None:
         merged = _match_speakers_by_overlap(seg_list, diar_annotation)
     else:
-        merged = [
-            {
-                "speaker": "Unknown",
-                "text": (s.text or "").strip(),
-                "start": float(s.start or 0.0),
-                "end": float(s.end or 0.0),
-            }
-            for s in seg_list
-        ]
+        merged = []
+        for s in seg_list:
+            # dict와 object 모두 지원
+            if isinstance(s, dict):
+                merged.append({
+                    "speaker": "Unknown",
+                    "text": s.get("text", "").strip(),
+                    "start": float(s.get("start", 0.0)),
+                    "end": float(s.get("end", 0.0)),
+                })
+            else:
+                merged.append({
+                    "speaker": "Unknown",
+                    "text": (s.text or "").strip(),
+                    "start": float(s.start or 0.0),
+                    "end": float(s.end or 0.0),
+                })
 
     # 4) 마크다운/요약/액션
     title = os.path.splitext(os.path.basename(path))[0] or "회의록"

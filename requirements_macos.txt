@@ -1,0 +1,42 @@
+# macOS 전용 Requirements
+# 설치 방법: pip install -r requirements_macos.txt
+
+# --- Diarization & STT ---
+pyannote.audio==3.3.2
+faster-whisper==1.0.3
+diart==0.9.2
+
+# --- Audio I/O (macOS) ---
+soundfile
+librosa==0.10.2.post1
+# PyAudio는 macOS에서 설치 어려움 -> sounddevice 사용
+# brew install portaudio 후 설치 가능하지만 sounddevice 권장
+sounddevice  # macOS/Linux용 대체 오디오 라이브러리
+dateparser
+
+# --- Data/Utils ---
+numpy
+pandas
+matplotlib
+python-dotenv
+huggingface_hub>=0.24.0
+
+# --- Backend (옵션) ---
+fastapi
+python-socketio[asgi]
+uvicorn
+
+# --- GUI ---
+PySide6  # PyQt6 대신 PySide6 (macOS 호환성 더 좋음)
+
+# --- Torch (Apple Silicon / Intel Mac) ---
+# Apple Silicon (M1/M2/M3): MPS 지원
+# Intel Mac: CPU only
+torch>=2.0.0
+torchvision
+torchaudio
+
+# --- Embedding & Vector DB ---
+sentence-transformers>=3.0.1
+qdrant-client>=1.9.1
+scikit-learn

@@ -154,7 +154,7 @@ class SpeakerManager:
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         return np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
 
-    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.65) -> tuple[str, float]:
+    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.85) -> tuple[str, float]:
         """화자 식별 또는 새 화자 생성
 
         Returns:
@@ -202,3 +202,27 @@ class SpeakerManager:
     def get_speaker_display_name(self, speaker_id: str) -> str:
         """화자 ID에 대한 표시 이름 반환"""
         return self.speaker_mapping.get(speaker_id, speaker_id)
+
+    def reset_all_speakers(self) -> bool:
+        """모든 화자 정보 초기화"""
+        try:
+            # 메모리 초기화
+            self.speakers = []
+            self.speaker_mapping = {}
+            self.next_speaker_id = 1
+
+            # 파일 삭제
+            import os
+            if os.path.exists(SPEAKER_PROFILES_PATH):
+                os.remove(SPEAKER_PROFILES_PATH)
+                print(f"Deleted: {SPEAKER_PROFILES_PATH}")
+
+            if os.path.exists(SPEAKER_MAPPING_PATH):
+                os.remove(SPEAKER_MAPPING_PATH)
+                print(f"Deleted: {SPEAKER_MAPPING_PATH}")
+
+            print("All speakers have been reset.")
+            return True
+        except Exception as e:
+            print(f"Error resetting speakers: {e}")
+            return False
