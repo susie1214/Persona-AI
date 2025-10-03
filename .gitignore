@@ -9,3 +9,5 @@ samples
 venv
 
 .env
+
+.claude/
