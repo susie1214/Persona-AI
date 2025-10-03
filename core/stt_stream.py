@@ -4,12 +4,16 @@ from faster_whisper import WhisperModel
 
 
 class STTWorker(threading.Thread):
-    def __init__(self, meeting_id, lang="ko", model_size="small"):
+    def __init__(self, meeting_id, lang="ko", model_size="small", device="cpu", compute_type="int8"):
         super().__init__(daemon=True)
         self.meeting_id = meeting_id
         self.lang = lang
         self.q = queue.Queue()
-        self.model = WhisperModel(model_size, device="cuda", compute_type="float16")
+        try:
+            self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        except Exception:
+            # CUDA 오류 시 CPU로 폴백
+            self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
         os.makedirs("data/meetings", exist_ok=True)
         self.out_path = f"data/meetings/{meeting_id}.jsonl"
         self._running = True
