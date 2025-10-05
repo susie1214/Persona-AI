@@ -1,6 +1,7 @@
 # 🧑‍💻 Persona-AI
-**Persona AI: 실시간 회의 비서 프로젝트**  
+<img width="188" height="164" alt="image" src="https://github.com/user-attachments/assets/5949ccc8-fd2e-4cfb-a277-2b7fe21f87bd" />
 
+**Persona AI: 실시간 회의 비서 프로젝트**  
 실시간 음성 회의를 분석하여 각 참여자의 **디지털 페르소나**를 구축하고, 대화 기반의 지능형 비서 기능을 제공하는 독립 데스크톱 애플리케이션입니다.  
 
 이 프로젝트는 단순한 회의록 작성을 넘어, 각 참여자의 **말투·역할·전문성**을 학습하여 살아있는 페르소나를 생성합니다.  
@@ -97,3 +98,6 @@
 
 💡 Persona-AI는 단순한 회의록 도구가 아니라, 사람을 닮은 '지능형 디지털 페르소나'를 만들어
 회의를 더 생산적이고 기억에 남게 만드는 차세대 AI 비서입니다.
+
+## 🖥️ 출력화면 예시
+<img width="600" height="351" alt="image" src="https://github.com/user-attachments/assets/130d6907-2872-4d33-bd15-b2c8fc7d88e9" />
