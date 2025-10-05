@@ -18,6 +18,10 @@ class Speaker:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     confidence_scores: List[float] = field(default_factory=list)
 
+    # 대화 히스토리 (Phase 1 추가)
+    utterances: List[Dict] = field(default_factory=list)  # {text, timestamp, meeting_id}
+    conversation_stats: Dict = field(default_factory=dict)  # 통계 정보
+
     def get_average_embedding(self) -> Optional[np.ndarray]:
         if not self.embeddings:
             return None
@@ -33,6 +37,40 @@ class Speaker:
         """임베딩과 신뢰도 점수 추가"""
         self.embeddings.append(embedding)
         self.confidence_scores.append(confidence)
+
+    def add_utterance(self, text: str, timestamp: str = None, meeting_id: str = None):
+        """발언 추가"""
+        if timestamp is None:
+            timestamp = datetime.now().isoformat()
+
+        self.utterances.append({
+            "text": text,
+            "timestamp": timestamp,
+            "meeting_id": meeting_id
+        })
+
+        # 통계 업데이트
+        self._update_stats()
+
+    def _update_stats(self):
+        """대화 통계 업데이트"""
+        if not self.utterances:
+            self.conversation_stats = {}
+            return
+
+        texts = [u["text"] for u in self.utterances]
+
+        # 기본 통계
+        self.conversation_stats = {
+            "total_utterances": len(texts),
+            "avg_length": sum(len(t) for t in texts) / len(texts),
+            "total_chars": sum(len(t) for t in texts),
+            "last_updated": datetime.now().isoformat()
+        }
+
+    def get_recent_utterances(self, limit: int = 10) -> List[Dict]:
+        """최근 발언 가져오기"""
+        return self.utterances[-limit:] if self.utterances else []
 
 class SpeakerManager:
     def __init__(self):
