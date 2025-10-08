@@ -3,6 +3,20 @@ import os, sys, traceback, faulthandler, logging
 from PySide6.QtWidgets import QApplication
 from ui.meeting_console import MeetingConsole
 
+# .env 파일 로드
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print(f"[INFO] .env 파일 로드 완료")
+    if os.getenv("HF_TOKEN"):
+        print(f"[INFO] HF_TOKEN 설정됨: {os.getenv('HF_TOKEN')[:10]}...")
+    else:
+        print(f"[WARNING] HF_TOKEN이 .env에 없거나 비어있습니다.")
+except ImportError:
+    print("[WARNING] python-dotenv가 설치되지 않았습니다. .env 파일을 사용하려면 'pip install python-dotenv'를 실행하세요.")
+except Exception as e:
+    print(f"[ERROR] .env 파일 로드 실패: {e}")
+
 # 경고 소음 줄이기
 import warnings
 warnings.filterwarnings("ignore", module="pyannote.audio")

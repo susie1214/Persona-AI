@@ -80,10 +80,29 @@ class SpeakerManager:
         self.load_speakers()
         self.load_speaker_mapping()
 
+        # 안전성 체크: speakers가 list인지 확인
+        if not isinstance(self.speakers, list):
+            print(f"ERROR: speakers is not a list, type={type(self.speakers)}, converting to list")
+            if isinstance(self.speakers, dict):
+                self.speakers = list(self.speakers.values())
+            else:
+                self.speakers = []
+
     def load_speakers(self):
         try:
             with open(SPEAKER_PROFILES_PATH, "rb") as f:
-                self.speakers = pickle.load(f)
+                loaded_data = pickle.load(f)
+
+                # dict로 로드된 경우 list로 변환
+                if isinstance(loaded_data, dict):
+                    print("Warning: speakers loaded as dict, converting to list")
+                    self.speakers = list(loaded_data.values()) if loaded_data else []
+                elif isinstance(loaded_data, list):
+                    self.speakers = loaded_data
+                else:
+                    print(f"Warning: unexpected speakers type: {type(loaded_data)}")
+                    self.speakers = []
+
             print(f"Loaded {len(self.speakers)} speaker profiles.")
         except FileNotFoundError:
             self.speakers = []
@@ -155,6 +174,11 @@ class SpeakerManager:
 
     def create_new_speaker(self, embedding: np.ndarray, confidence: float = 1.0) -> str:
         """새로운 화자 생성 (자동으로 speaker_xx ID 할당)"""
+        # 안전성 체크
+        if not isinstance(self.speakers, list):
+            print("ERROR: speakers is not a list in create_new_speaker, converting")
+            self.speakers = list(self.speakers.values()) if isinstance(self.speakers, dict) else []
+
         speaker_id = f"speaker_{self.next_speaker_id:02d}"
         display_name = speaker_id  # 기본값으로 ID와 동일
 
@@ -198,6 +222,11 @@ class SpeakerManager:
         Returns:
             tuple: (speaker_id, confidence_score)
         """
+        # 안전성 체크
+        if not isinstance(self.speakers, list):
+            print("ERROR: speakers is not a list in identify_speaker, converting")
+            self.speakers = list(self.speakers.values()) if isinstance(self.speakers, dict) else []
+
         best_match_id = None
         max_similarity = -1.0
 
@@ -214,10 +243,12 @@ class SpeakerManager:
         if max_similarity > threshold:
             # 기존 화자에 임베딩 추가
             self.add_speaker_embedding(best_match_id, embedding, max_similarity)
+            print(f"[화자 식별] 기존 화자: {best_match_id}, 유사도: {max_similarity:.3f} (임계값: {threshold})")
             return best_match_id, max_similarity
         else:
             # 새로운 화자 생성
             new_speaker_id = self.create_new_speaker(embedding, 1.0)
+            print(f"[화자 식별] 새 화자 생성: {new_speaker_id}, 최대 유사도: {max_similarity:.3f} (임계값: {threshold})")
             return new_speaker_id, 1.0
 
     def update_speaker_name(self, speaker_id: str, new_name: str) -> bool:

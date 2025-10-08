@@ -282,13 +282,13 @@ class MeetingConsole(QMainWindow):
 
         row = QHBoxLayout()
         row.addWidget(QLabel("다음 회의 시작"))
-        self.dt_start = QDateTimeEdit()
+        self.dt_start = QDateTimeEdit(calendarPopup = True)
         self.dt_start.setDateTime(QDateTime.currentDateTime().addDays(7))
         self.dt_start.setDisplayFormat("yyyy-MM-dd HH:mm")
         row.addWidget(self.dt_start)
 
         row.addWidget(QLabel("종료"))
-        self.dt_end = QDateTimeEdit()
+        self.dt_end = QDateTimeEdit(calendarPopup = True)
         self.dt_end.setDateTime(QDateTime.currentDateTime().addDays(7).addSecs(3600))
         self.dt_end.setDisplayFormat("yyyy-MM-dd HH:mm")
         row.addWidget(self.dt_end)
@@ -326,6 +326,11 @@ class MeetingConsole(QMainWindow):
 
         self.edit_hf = QLineEdit()
         self.edit_hf.setPlaceholderText(f"{HF_TOKEN_ENV} (HuggingFace token)")
+        # .env 파일에서 로드된 토큰이 있으면 표시
+        existing_token = os.getenv(HF_TOKEN_ENV, "")
+        if existing_token:
+            self.edit_hf.setText(existing_token)
+            self.on_status(f"✓ .env에서 HF_TOKEN 로드됨: {existing_token[:10]}...")
 
         self.btn_add_participant = QPushButton("참가자 추가")
         self.btn_save_speakers = QPushButton("화자 정보 저장")
@@ -601,6 +606,21 @@ class MeetingConsole(QMainWindow):
         self.txt_status.appendPlainText(f"{now_str()}  {msg}")
 
     def on_segment(self, seg: Segment):
+        # seg가 dict인 경우 Segment 객체로 변환
+        if isinstance(seg, dict):
+            seg = Segment(
+                start=seg.get('start', 0.0),
+                end=seg.get('end', 0.0),
+                text=seg.get('text', ''),
+                speaker_id=seg.get('speaker_id', 'Unknown'),
+                speaker_name=seg.get('speaker_name', 'Unknown')
+            )
+
+        # live_segments가 dict로 잘못 변경된 경우 복구
+        if isinstance(self.state.live_segments, dict):
+            self.on_status("ERROR: live_segments가 dict로 변경됨. list로 복구합니다.")
+            self.state.live_segments = []
+
         self.state.live_segments.append(seg)
         self.list_chat.addItem(QListWidgetItem(f"[{seg.speaker_name}] {seg.text}"))
         self.list_chat.scrollToBottom()
@@ -639,6 +659,11 @@ class MeetingConsole(QMainWindow):
         """새로운 화자가 자동으로 할당되었을 때 처리"""
         print(f"[DEBUG] on_new_speaker_auto_assigned called with: {speaker_name}")
         self.on_status(f"새 화자 자동 할당: {speaker_name}")
+
+        # SpeakerManager의 speakers가 dict인 경우 복구
+        if isinstance(self.speaker_manager.speakers, dict):
+            self.on_status("ERROR: speaker_manager.speakers가 dict로 변경됨. list로 복구합니다.")
+            self.speaker_manager.speakers = list(self.speaker_manager.speakers.values()) if self.speaker_manager.speakers else []
 
         # SpeakerManager에 화자 추가 (임베딩 없이 ID만 등록)
         if speaker_name not in self.speaker_manager.speaker_mapping:
