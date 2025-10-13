@@ -6,9 +6,8 @@ deprecated
 samples
 
 data
-output
-outputs
-output/
+output/*
+outputs/*
 qdrant_db/
 models/
 qdrant_storage/
