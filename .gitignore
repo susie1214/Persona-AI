@@ -6,7 +6,8 @@ deprecated
 samples
 
 data
-output/*
+output
+output/logs/*
 outputs/*
 qdrant_db/
 models/
@@ -18,3 +19,5 @@ venv
 .env
 
 .claude
+
+output/logs/app.log
