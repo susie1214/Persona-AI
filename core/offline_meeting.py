@@ -156,13 +156,13 @@ def _match_speakers_by_overlap(whisper_segments, diar_annotation) -> List[Dict]:
 # ---------- Public API ----------
 def process_audio_file(
     path: str,
-    asr_model: str = "small",
+    asr_model: str,
     use_gpu: bool = True,
     diarize: bool = True,
     settings: Optional[Dict] = None,
 ) -> Dict:
     """
-    오디오/비디오 파일 경로를 받아 STT(+옵션: 화자분리) 수행 후
+    오디오 파일 경로를 받아 STT(+옵션: 화자분리) 수행 후
     - segments(list[dict]), markdown(str), title(str), json_path(str) 를 반환
 
     requirements:
