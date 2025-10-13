@@ -18,6 +18,10 @@ class Speaker:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     confidence_scores: List[float] = field(default_factory=list)
 
+    # 대화 히스토리 (Phase 1 추가)
+    utterances: List[Dict] = field(default_factory=list)  # {text, timestamp, meeting_id}
+    conversation_stats: Dict = field(default_factory=dict)  # 통계 정보
+
     def get_average_embedding(self) -> Optional[np.ndarray]:
         if not self.embeddings:
             return None
@@ -34,6 +38,40 @@ class Speaker:
         self.embeddings.append(embedding)
         self.confidence_scores.append(confidence)
 
+    def add_utterance(self, text: str, timestamp: str = None, meeting_id: str = None):
+        """발언 추가"""
+        if timestamp is None:
+            timestamp = datetime.now().isoformat()
+
+        self.utterances.append({
+            "text": text,
+            "timestamp": timestamp,
+            "meeting_id": meeting_id
+        })
+
+        # 통계 업데이트
+        self._update_stats()
+
+    def _update_stats(self):
+        """대화 통계 업데이트"""
+        if not self.utterances:
+            self.conversation_stats = {}
+            return
+
+        texts = [u["text"] for u in self.utterances]
+
+        # 기본 통계
+        self.conversation_stats = {
+            "total_utterances": len(texts),
+            "avg_length": sum(len(t) for t in texts) / len(texts),
+            "total_chars": sum(len(t) for t in texts),
+            "last_updated": datetime.now().isoformat()
+        }
+
+    def get_recent_utterances(self, limit: int = 10) -> List[Dict]:
+        """최근 발언 가져오기"""
+        return self.utterances[-limit:] if self.utterances else []
+
 class SpeakerManager:
     def __init__(self):
         self.speakers: List[Speaker] = []
@@ -42,10 +80,29 @@ class SpeakerManager:
         self.load_speakers()
         self.load_speaker_mapping()
 
+        # 안전성 체크: speakers가 list인지 확인
+        if not isinstance(self.speakers, list):
+            print(f"ERROR: speakers is not a list, type={type(self.speakers)}, converting to list")
+            if isinstance(self.speakers, dict):
+                self.speakers = list(self.speakers.values())
+            else:
+                self.speakers = []
+
     def load_speakers(self):
         try:
             with open(SPEAKER_PROFILES_PATH, "rb") as f:
-                self.speakers = pickle.load(f)
+                loaded_data = pickle.load(f)
+
+                # dict로 로드된 경우 list로 변환
+                if isinstance(loaded_data, dict):
+                    print("Warning: speakers loaded as dict, converting to list")
+                    self.speakers = list(loaded_data.values()) if loaded_data else []
+                elif isinstance(loaded_data, list):
+                    self.speakers = loaded_data
+                else:
+                    print(f"Warning: unexpected speakers type: {type(loaded_data)}")
+                    self.speakers = []
+
             print(f"Loaded {len(self.speakers)} speaker profiles.")
         except FileNotFoundError:
             self.speakers = []
@@ -117,6 +174,11 @@ class SpeakerManager:
 
     def create_new_speaker(self, embedding: np.ndarray, confidence: float = 1.0) -> str:
         """새로운 화자 생성 (자동으로 speaker_xx ID 할당)"""
+        # 안전성 체크
+        if not isinstance(self.speakers, list):
+            print("ERROR: speakers is not a list in create_new_speaker, converting")
+            self.speakers = list(self.speakers.values()) if isinstance(self.speakers, dict) else []
+
         speaker_id = f"speaker_{self.next_speaker_id:02d}"
         display_name = speaker_id  # 기본값으로 ID와 동일
 
@@ -160,6 +222,11 @@ class SpeakerManager:
         Returns:
             tuple: (speaker_id, confidence_score)
         """
+        # 안전성 체크
+        if not isinstance(self.speakers, list):
+            print("ERROR: speakers is not a list in identify_speaker, converting")
+            self.speakers = list(self.speakers.values()) if isinstance(self.speakers, dict) else []
+
         best_match_id = None
         max_similarity = -1.0
 
@@ -176,10 +243,12 @@ class SpeakerManager:
         if max_similarity > threshold:
             # 기존 화자에 임베딩 추가
             self.add_speaker_embedding(best_match_id, embedding, max_similarity)
+            print(f"[화자 식별] 기존 화자: {best_match_id}, 유사도: {max_similarity:.3f} (임계값: {threshold})")
             return best_match_id, max_similarity
         else:
             # 새로운 화자 생성
             new_speaker_id = self.create_new_speaker(embedding, 1.0)
+            print(f"[화자 식별] 새 화자 생성: {new_speaker_id}, 최대 유사도: {max_similarity:.3f} (임계값: {threshold})")
             return new_speaker_id, 1.0
 
     def update_speaker_name(self, speaker_id: str, new_name: str) -> bool:

@@ -100,7 +100,7 @@ class AudioWorker(QObject):
         # 화자 연속성 추적
         self._last_speaker_id = None
         self._last_speech_time = 0.0
-        self._continuity_threshold = 8.0  # 8초 이내 발화는 같은 화자 우선 고려
+        self._continuity_threshold = 3.0  # 3초 이내 발화는 같은 화자 우선 고려 (기존 8초에서 단축)
         self._min_text_length = 3  # 최소 텍스트 길이
 
         # Embedding inference 모델 (lazy loading)
@@ -334,15 +334,21 @@ class AudioWorker(QObject):
     def _get_embedding_inference(self):
         """임베딩 추출 모델 lazy loading"""
         if self._embedding_inference is None:
+            hf_token = os.getenv("HF_TOKEN")
+            if not hf_token:
+                self.sig_status.emit("[WARNING] HF_TOKEN이 설정되지 않아 화자 임베딩 기능을 사용할 수 없습니다. Settings에서 HuggingFace 토큰을 입력하세요.")
+                return None
+
             try:
                 from pyannote.audio import Inference
+                self.sig_status.emit("화자 임베딩 모델 로딩 중...")
                 self._embedding_inference = Inference(
                     "pyannote/embedding",
-                    use_auth_token=os.getenv("HF_TOKEN")
+                    use_auth_token=hf_token
                 )
-                self.sig_status.emit("화자 임베딩 모델 로드 완료")
+                self.sig_status.emit("✓ 화자 임베딩 모델 로드 완료")
             except Exception as e:
-                self.sig_status.emit(f"임베딩 모델 로드 실패: {e}")
+                self.sig_status.emit(f"✗ 임베딩 모델 로드 실패: {e}")
                 return None
         return self._embedding_inference
 
@@ -430,26 +436,30 @@ class AudioWorker(QObject):
             return self._last_speaker_id
 
         # 5. 임베딩 기반 화자 식별 (침묵이 길거나 첫 발화인 경우)
-        if wav_bytes and self.state.diarization_enabled:
+        # diarization이 비활성화되어도 임베딩 기반 식별 시도
+        if wav_bytes:
             embedding = self._extract_speaker_embedding(wav_bytes)
             if embedding is not None:
                 # SpeakerManager로 화자 식별
                 speaker_id, confidence = self.speaker_manager.identify_speaker(
                     embedding,
-                    threshold=0.75  # 높은 임계값으로 정확성 향상
+                    threshold=0.70  # 임계값 조정 (0.75 -> 0.70)
                 )
 
                 self._last_speaker_id = speaker_id
                 self._last_speech_time = end
-                self.sig_status.emit(f"임베딩 기반 화자 식별: {speaker_id} (신뢰도: {confidence:.2f})")
+                diar_status = "활성화" if self.state.diarization_enabled else "비활성화"
+                self.sig_status.emit(f"임베딩 기반 화자 식별 (Diar {diar_status}): {speaker_id} (신뢰도: {confidence:.2f})")
                 return speaker_id
 
         # 6. 임베딩 추출 실패 시 연속성만으로 판단
         if self._last_speaker_id:
             self._last_speech_time = end
+            self.sig_status.emit(f"[DEBUG] 임베딩 실패, 이전 화자 유지: {self._last_speaker_id}")
             return self._last_speaker_id
 
         # 7. 최후 수단: Unknown
+        self.sig_status.emit(f"[DEBUG] 모든 식별 실패, Unknown 반환")
         return "Unknown"
 
     # ====== ASR ======

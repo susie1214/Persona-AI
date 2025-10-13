@@ -89,7 +89,7 @@ class UploadMinutesWidget(QWidget):
         self.progress.setVisible(True); self.progress.setRange(0,0)
         self.md.setVisible(False); self.url_box.setVisible(False)
         # 모델/옵션은 간단히 고정 (필요하면 UI로 노출)
-        asr_model, use_gpu, diarize = "small", True, True
+        asr_model, use_gpu, diarize = "midium", True, True
 
         self.thread = QThread()
         self.worker = _Worker(path, asr_model, use_gpu, diarize)
