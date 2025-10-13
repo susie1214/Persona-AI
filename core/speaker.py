@@ -216,7 +216,7 @@ class SpeakerManager:
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         return np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
 
-    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.85) -> tuple[str, float]:
+    def identify_speaker(self, embedding: np.ndarray, threshold: float = 0.55) -> tuple[str, float]:
         """화자 식별 또는 새 화자 생성
 
         Returns:
@@ -240,9 +240,18 @@ class SpeakerManager:
                 max_similarity = similarity
                 best_match_id = speaker.speaker_id
 
-        if max_similarity > threshold:
-            # 기존 화자에 임베딩 추가
-            self.add_speaker_embedding(best_match_id, embedding, max_similarity)
+        if max_similarity > threshold and best_match_id is not None:
+            # 기존 화자에 임베딩 추가 (가중 평균으로 점진적 업데이트)
+            speaker = self.get_speaker_by_id(best_match_id)
+            if speaker:
+                # 최근 5개의 임베딩만 유지 (메모리 절약 + 최신 음성 특징 반영)
+                if len(speaker.embeddings) >= 5:
+                    speaker.embeddings = speaker.embeddings[-4:]  # 마지막 4개만 유지
+                    speaker.confidence_scores = speaker.confidence_scores[-4:]
+
+                speaker.add_embedding(embedding, max_similarity)
+                self.save_speakers()
+
             print(f"[화자 식별] 기존 화자: {best_match_id}, 유사도: {max_similarity:.3f} (임계값: {threshold})")
             return best_match_id, max_similarity
         else:
@@ -295,3 +304,76 @@ class SpeakerManager:
         except Exception as e:
             print(f"Error resetting speakers: {e}")
             return False
+
+    def merge_similar_speakers(self, similarity_threshold: float = 0.70) -> int:
+        """유사한 화자들을 자동으로 병합
+
+        Args:
+            similarity_threshold: 병합할 화자 간 유사도 임계값
+
+        Returns:
+            int: 병합된 화자 수
+        """
+        if len(self.speakers) < 2:
+            return 0
+
+        merged_count = 0
+        i = 0
+
+        while i < len(self.speakers):
+            speaker_i = self.speakers[i]
+            avg_emb_i = speaker_i.get_average_embedding()
+
+            if avg_emb_i is None:
+                i += 1
+                continue
+
+            j = i + 1
+            while j < len(self.speakers):
+                speaker_j = self.speakers[j]
+                avg_emb_j = speaker_j.get_average_embedding()
+
+                if avg_emb_j is None:
+                    j += 1
+                    continue
+
+                # 유사도 계산
+                similarity = self._cosine_similarity(avg_emb_i, avg_emb_j)
+
+                if similarity > similarity_threshold:
+                    # speaker_j를 speaker_i로 병합
+                    print(f"[화자 병합] {speaker_j.speaker_id} -> {speaker_i.speaker_id} (유사도: {similarity:.3f})")
+
+                    # 임베딩 통합
+                    speaker_i.embeddings.extend(speaker_j.embeddings)
+                    speaker_i.confidence_scores.extend(speaker_j.confidence_scores)
+
+                    # 최근 10개만 유지
+                    if len(speaker_i.embeddings) > 10:
+                        speaker_i.embeddings = speaker_i.embeddings[-10:]
+                        speaker_i.confidence_scores = speaker_i.confidence_scores[-10:]
+
+                    # 발화 통합
+                    speaker_i.utterances.extend(speaker_j.utterances)
+                    speaker_i._update_stats()
+
+                    # speaker_j 제거
+                    self.speakers.pop(j)
+
+                    # 매핑 업데이트
+                    if speaker_j.speaker_id in self.speaker_mapping:
+                        # 기존 매핑을 speaker_i로 변경
+                        self.speaker_mapping[speaker_j.speaker_id] = speaker_i.display_name
+
+                    merged_count += 1
+                else:
+                    j += 1
+
+            i += 1
+
+        if merged_count > 0:
+            self.save_speakers()
+            self.save_speaker_mapping()
+            print(f"[화자 병합 완료] 총 {merged_count}개 화자 병합됨, 현재 화자 수: {len(self.speakers)}")
+
+        return merged_count

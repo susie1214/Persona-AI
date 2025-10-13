@@ -53,16 +53,19 @@ class ChatDock(QWidget):
         sub.addWidget(self.btn)
         layout.addLayout(sub)
         self.btn.clicked.connect(self.on_send)
+        self.edit.returnPressed.connect(self.on_send)
         # :흰색_확인_표시: 초기 상태: 기본 챗봇 모드
         default_be = "openai:gpt-4o-mini"
         self.cmb_backend.setCurrentText(default_be)
-        self.view.append(f":나침반: Active persona: (없음) | backend: {default_be}")
+        
+        self.view.append(f"- Active persona: (없음) | backend: {default_be}")
     def on_persona_changed(self, name: str):
         if name == "(없음)":
             self.active_persona = None
             self._system_prompt = "You are a helpful assistant."
             return
         self.set_active_persona(name)
+        
     def set_active_persona(self, name: str | None):
         """외부에서 자동 페르소나 주입 시 호출"""
         self.active_persona = name
@@ -71,7 +74,8 @@ class ChatDock(QWidget):
         be = self.store.choose_backend(name)
         if self.cmb_backend.findText(be) >= 0:
             self.cmb_backend.setCurrentText(be)
-        self.view.append(f":나침반: Active persona: {name or '(없음)'} | backend: {be}")
+        self.view.append(f"- Active persona: {name or '(없음)'} | backend: {be}")
+    
     def on_send(self):
         q = self.edit.text().strip()
         if not q:

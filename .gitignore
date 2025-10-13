@@ -4,6 +4,10 @@ __pycache__
 # 
 deprecated
 samples
+output/
+qdrant_db/
+models/
+qdrant_storage/
 
 # 가상환경
 venv
@@ -11,3 +15,4 @@ venv
 .env
 
 .claude
+

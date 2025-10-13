@@ -8,6 +8,7 @@ from core.offline_meeting import process_audio_file
 from core.notes_export import save_markdown, save_html, start_share_server
 import os, webbrowser, datetime
 from ui.meeting_settings import MeetingSettingsWidget
+from typing import Optional
 
 class UploadMinutesWidget(QWidget):
     def __init__(self):
@@ -28,13 +29,25 @@ class _Worker(QObject):
     sig_done = Signal(dict)
     sig_error = Signal(str)
 
-    def __init__(self, path: str, asr_model: str, use_gpu: bool, diarize: bool):
+    def __init__(self, path: str, asr_model: str, use_gpu: bool, diarize: bool, use_llm_summary: bool = False, llm_backend: Optional[str] = None):
         super().__init__()
-        self.path = path; self.asr_model = asr_model; self.use_gpu = use_gpu; self.diarize = diarize
+        self.path = path
+        self.asr_model = asr_model
+        self.use_gpu = use_gpu
+        self.diarize = diarize
+        self.use_llm_summary = use_llm_summary
+        self.llm_backend = llm_backend
 
     def run(self):
         try:
-            res = process_audio_file(self.path, asr_model=self.asr_model, use_gpu=self.use_gpu, diarize=self.diarize)
+            res = process_audio_file(
+                self.path,
+                asr_model=self.asr_model,
+                use_gpu=self.use_gpu,
+                diarize=self.diarize,
+                use_llm_summary=self.use_llm_summary,
+                llm_backend=self.llm_backend
+            )
             self.sig_done.emit(res)
         except Exception as e:
             self.sig_error.emit(str(e))
@@ -50,6 +63,29 @@ class UploadMinutesWidget(QWidget):
                             "AI가 당신의 회의를 완벽하게 기록합니다.</div>")
         self.title.setAlignment(Qt.AlignCenter)
         L.addWidget(self.title)
+
+        # LLM 요약 옵션 추가
+        from PySide6.QtWidgets import QCheckBox, QComboBox
+        options_layout = QHBoxLayout()
+        self.chk_llm_summary = QCheckBox("🤖 AI 요약 사용 (LLM)")
+        self.chk_llm_summary.setChecked(False)
+        self.chk_llm_summary.setToolTip("LLM을 사용하여 회의록을 지능적으로 요약합니다 (OpenAI API 키 필요)")
+        options_layout.addWidget(self.chk_llm_summary)
+
+        self.combo_llm_backend = QComboBox()
+        self.combo_llm_backend.addItems([
+            "openai:gpt-4o-mini",
+            "openai:gpt-4o",
+            "openai:gpt-3.5-turbo"
+        ])
+        self.combo_llm_backend.setEnabled(False)
+        self.combo_llm_backend.setToolTip("사용할 LLM 모델 선택")
+        options_layout.addWidget(self.combo_llm_backend)
+        options_layout.addStretch()
+
+        self.chk_llm_summary.toggled.connect(lambda checked: self.combo_llm_backend.setEnabled(checked))
+
+        L.addLayout(options_layout)
 
         self.btn_upload = QPushButton("⬆  파일 업로드")
         self.btn_upload.setFixedHeight(44); self.btn_upload.setStyleSheet("font-weight:600;border-radius:10px;")
@@ -89,10 +125,14 @@ class UploadMinutesWidget(QWidget):
         self.progress.setVisible(True); self.progress.setRange(0,0)
         self.md.setVisible(False); self.url_box.setVisible(False)
         # 모델/옵션은 간단히 고정 (필요하면 UI로 노출)
-        asr_model, use_gpu, diarize = "midium", True, True
+        asr_model, use_gpu, diarize = "medium", True, True
+
+        # LLM 요약 옵션 가져오기
+        use_llm_summary = self.chk_llm_summary.isChecked()
+        llm_backend = self.combo_llm_backend.currentText() if use_llm_summary else None
 
         self.thread = QThread()
-        self.worker = _Worker(path, asr_model, use_gpu, diarize)
+        self.worker = _Worker(path, asr_model, use_gpu, diarize, use_llm_summary, llm_backend)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.sig_done.connect(self.on_done)

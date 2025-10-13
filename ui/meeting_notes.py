@@ -3,7 +3,8 @@
 from PySide6.QtCore import Qt, QThread, Signal, QObject
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QFileDialog, QMessageBox, QProgressBar, QLineEdit
+    QTextEdit, QFileDialog, QMessageBox, QProgressBar, QLineEdit,
+    QCheckBox, QComboBox
 )
 import os, datetime
 
@@ -12,16 +13,23 @@ from core.offline_meeting import process_audio_file
 class _SummWorker(QObject):
     sig_done = Signal(dict)
     sig_error = Signal(str)
-    def __init__(self, path, settings):
+    def __init__(self, path, settings, use_llm_summary=True, llm_backend=None):
         super().__init__()
         self.path = path
         self.settings = settings or {}
+        self.use_llm_summary = use_llm_summary
+        self.llm_backend = llm_backend
     def run(self):
         try:
             # mp3/wav/mp4/m4a 등 ffmpeg로 처리됨
             res = process_audio_file(
-                self.path, asr_model="medium", use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
-                diarize=True, settings=self.settings
+                self.path,
+                asr_model="medium",
+                use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
+                diarize=True,
+                use_llm_summary=self.use_llm_summary,
+                llm_backend=self.llm_backend,
+                settings=self.settings
             )
             self.sig_done.emit(res)
         except Exception as e:
@@ -41,6 +49,27 @@ class MeetingNotesView(QWidget):
         self.btn_upload = QPushButton("파일 선택")
         head.addWidget(self.btn_upload)
         L.addLayout(head)
+
+        # LLM 요약 옵션
+        llm_options = QHBoxLayout()
+        self.chk_llm_summary = QCheckBox("🤖 AI 요약 사용 (LLM)")
+        self.chk_llm_summary.setChecked(True)  # 기본값: LLM 사용
+        self.chk_llm_summary.setToolTip("LLM을 사용하여 회의록을 지능적으로 요약합니다 (OpenAI API 키 필요)")
+        llm_options.addWidget(self.chk_llm_summary)
+
+        self.combo_llm_backend = QComboBox()
+        self.combo_llm_backend.addItems([
+            "openai:gpt-4o-mini",
+            "openai:gpt-4o",
+            "openai:gpt-3.5-turbo"
+        ])
+        self.combo_llm_backend.setToolTip("사용할 LLM 모델 선택")
+        llm_options.addWidget(self.combo_llm_backend)
+        llm_options.addStretch()
+
+        self.chk_llm_summary.toggled.connect(lambda checked: self.combo_llm_backend.setEnabled(checked))
+
+        L.addLayout(llm_options)
 
         # 진행 표시
         self.progress = QProgressBar()

@@ -1,0 +1,20 @@
+{
+  "user_id": "jkj",
+  "name": "조진경",
+  "style": {
+    "tone": "명확/직설",
+    "format": "개조식, 결론 우선",
+    "sentence_len": "짧게",
+    "jargon": "",
+    "keywords": []
+  },
+  "alerts": {
+    "remind": "회의 10분 전",
+    "fields": []
+  },
+  "report_focus": "정확성",
+  "backend": "openai:gpt-4o-mini",
+  "english_bilingual": false,
+  "memo": "",
+  "consent": true
+}

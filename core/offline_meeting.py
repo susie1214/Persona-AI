@@ -11,6 +11,7 @@ import json
 import time
 import datetime
 from typing import List, Dict, Optional
+from core.audio import Segment
 
 # ----- Optional deps guard -----
 try:
@@ -25,6 +26,24 @@ except Exception:
 
 
 # ---------- Helper Functions ----------
+
+def _dict_to_segment(seg_dict: Dict) -> Segment:
+    """
+    Dict 형식의 세그먼트를 Segment 객체로 변환
+
+    Args:
+        seg_dict: {"speaker": str, "text": str, "start": float, "end": float}
+
+    Returns:
+        Segment 객체
+    """
+    return Segment(
+        text=seg_dict.get("text", ""),
+        start=seg_dict.get("start", 0.0),
+        end=seg_dict.get("end", 0.0),
+        speaker_name=seg_dict.get("speaker", "Unknown")
+    )
+
 
 def _whisper_device(use_gpu: bool) -> str:
     """GPU 사용 여부에 따라 디바이스 결정"""
@@ -99,7 +118,7 @@ def _extract_segment_data(segment) -> Dict:
 
 
 def _simple_summarize(segments: List[Dict], max_len: int = 12) -> str:
-    """간단한 요약 생성"""
+    """간단한 요약 생성 (LLM 없이)"""
     lines = []
     for s in segments:
         text = s.get("text", "").strip()
@@ -129,9 +148,18 @@ def _extract_actions(segments: List[Dict]) -> List[str]:
     return list(dict.fromkeys(actions))
 
 
-def _md_from_segments(title: str, segs: List[Dict]) -> Dict[str, str]:
+def _md_from_segments(title: str, segs: List[Dict], use_llm_summary: bool = False, llm_backend: Optional[str] = None) -> Dict[str, str]:
     """세그먼트에서 마크다운 문서 생성"""
-    summary = _simple_summarize(segs, max_len=14)
+    # LLM 요약 또는 간단한 요약 사용
+    if use_llm_summary:
+        print("[INFO] Generating LLM-based summary...")
+        # Dict를 Segment 객체로 변환
+        from core.summarizer import llm_summarize
+        segment_objects = [_dict_to_segment(s) for s in segs]
+        summary = llm_summarize(segment_objects, backend=llm_backend)
+    else:
+        summary = _simple_summarize(segs, max_len=14)
+
     actions = _extract_actions(segs)
 
     md_lines = []
@@ -139,17 +167,23 @@ def _md_from_segments(title: str, segs: List[Dict]) -> Dict[str, str]:
     md_lines.append("")
     md_lines.append(f"- 생성일: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
     md_lines.append(f"- 총 발언 수: {len(segs)}")
+    md_lines.append(f"- 요약 방식: {'AI 요약 (LLM)' if use_llm_summary else '기본 요약'}")
     md_lines.append("")
 
-    md_lines.append("## 요약(최근순)")
+    md_lines.append("## 요약")
     md_lines.append("")
-    md_lines.append("```")
-    md_lines.append(summary)
-    md_lines.append("```")
+    if use_llm_summary:
+        # LLM 요약은 이미 마크다운 형식으로 되어 있음
+        md_lines.append(summary)
+    else:
+        # 기본 요약은 코드 블록으로 감싸기
+        md_lines.append("```")
+        md_lines.append(summary)
+        md_lines.append("```")
     md_lines.append("")
 
     if actions:
-        md_lines.append("## Action Items")
+        md_lines.append("## Action Items (자동 추출)")
         md_lines.extend(actions)
         md_lines.append("")
 
@@ -223,9 +257,11 @@ def _match_speakers_by_overlap(whisper_segments: List[Dict], diar_annotation) ->
 
 def process_audio_file(
     path: str,
-    asr_model: str = "small",
+    asr_model: str,
     use_gpu: bool = True,
     diarize: bool = True,
+    use_llm_summary: bool = False,
+    llm_backend: Optional[str] = None,
     settings: Optional[Dict] = None,
 ) -> Dict:
     """
@@ -237,6 +273,8 @@ def process_audio_file(
         asr_model: Whisper 모델명 (tiny/base/small/medium/large)
         use_gpu: GPU 사용 여부 (macOS는 무시됨)
         diarize: 화자 분리 사용 여부
+        use_llm_summary: LLM 기반 요약 사용 여부
+        llm_backend: LLM 백엔드 (예: "openai:gpt-4o-mini")
         settings: 추가 설정 (선택)
 
     Returns:
@@ -324,7 +362,7 @@ def process_audio_file(
 
     # 4) 마크다운 생성
     title = os.path.splitext(os.path.basename(path))[0] or "회의록"
-    md_bundle = _md_from_segments(title, merged)
+    md_bundle = _md_from_segments(title, merged, use_llm_summary=use_llm_summary, llm_backend=llm_backend)
 
     # 5) JSON 저장
     ts = int(time.time())
@@ -338,6 +376,8 @@ def process_audio_file(
         "asr_model": asr_model,
         "device": device,
         "diarization": bool(diar_annotation is not None),
+        "use_llm_summary": use_llm_summary,
+        "llm_backend": llm_backend if use_llm_summary else None,
     }
     json_path = os.path.join("output", "meetings", f"meeting_{ts}.json")
 
