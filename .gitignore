@@ -7,7 +7,6 @@ samples
 
 data
 output
-output/logs/*
 outputs/*
 qdrant_db/
 models/
@@ -20,4 +19,5 @@ venv
 
 .claude
 
-output/logs/app.log
+speaker_mapping.json
+speaker_profiles.pkl

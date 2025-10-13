@@ -384,26 +384,6 @@ def render_summary_html_from_segments(segments, max_len=12,
     </div>
     '''
 
-def actions_from_segments(segments):
-    """
-    기존 extract_actions는 문자열 리스트를 반환.
-    UI 표를 위해 owner/due 등을 갖춘 dict 리스트를 함께 쓰기 위해 새로 추가.
-    """
-    items = []
-    acts = []
-    seen = set()
-    for s in segments:
-        if any(v in s.text for v in ACTION_VERBS):
-            deadline = dateparser.parse(s.text, languages=["ko"])
-            dstr = f" (기한: {deadline.strftime('%Y-%m-%d %H:%M')})" if deadline else ""
-            acts.append(f"- [{s.speaker_name}] {s.text}{dstr}")
-    uniq, seen = [], set()
-    for a in acts:
-        if a not in seen:
-            uniq.append(a)
-            seen.add(a)
-    return uniq
-
 def llm_summarize(
     segments: List[Segment],
     backend: Optional[str] = None,
@@ -465,49 +445,6 @@ def llm_summarize(
     #     return summary
     # except Exception as e:
     #     return f"⚠️ LLM 요약 생성 실패: {str(e)}\n\n기본 요약으로 대체합니다.\n\n{simple_summarize(segments, max_len=15)}"
-    #     text = getattr(s, "text", "").strip()
-    #     if not text:
-    #         continue
-    #     if any(v in text for v in ACTION_VERBS):
-    #         owner = s.speaker_name if s.speaker_name != "Unknown" else "speaker_00"
-    #         # 날짜 파싱
-    #         if dateparser:
-    #             try:
-    #                 deadline = dateparser.parse(text, languages=["ko"])
-    #             except Exception:
-    #                 deadline = None
-    #             due = deadline.strftime("%Y-%m-%d %H:%M") if deadline else _parse_due_fallback_ko(text)
-    #         else:
-    #             due = _parse_due_fallback_ko(text)
-
-    #         title = text
-    #         key = (owner, title, due)
-    #         if key in seen:
-    #             continue
-    #         seen.add(key)
-    #         items.append({
-    #             "title": title,
-    #             "owner": owner,
-    #             "due": due,
-    #             "priority": "M",
-    #             "status": "todo",
-    #             "notes": ""
-    #         })
-    # return items
-
-def render_actions_table_html(items):
-    headers = ["Title","Owner","Due","Priority","Status","Notes"]
-    rows = [[i["title"], i["owner"], i["due"], i["priority"], i["status"], i["notes"]] for i in items] if items else []
-    table = _table(headers, rows) if rows else "<div style='color:#868e96'>등록된 Action Item이 없습니다.</div>"
-    title = '''
-    <div style="margin:10px 0 6px;font-weight:700;color:#1c7ed6">📝 Action Items</div>
-    '''
-    return f'''
-    <div style="font-family:'Pretendard',Segoe UI,Apple SD Gothic Neo,system-ui; font-size:14px; color:#212529">
-      {title}
-      {table}
-    </div>
-    '''
 
 # --------- Agenda extraction ---------
 _AGENDA_HINTS = [
