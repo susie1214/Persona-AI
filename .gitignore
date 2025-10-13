@@ -7,6 +7,8 @@ samples
 data
 output
 qdrant_db
+outputs
+models
 
 # 가상환경
 venv
