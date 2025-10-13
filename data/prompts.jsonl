@@ -1,0 +1,4 @@
+{"id":"ex1","prompt":"이번 스프린트에서 결정된 핵심 의사결정을 요약해줘.","gold":["DECISION"]}
+{"id":"ex2","prompt":"다음 회의 일정을 잡아줘. 준비물과 참석자도 정리해.","gold":["SCHEDULE","ACTION"]}
+{"id":"ex3","prompt":"현재 프로젝트의 리스크 항목과 대응 방안을 설명해줘.","gold":["RISK","ACTION"]}
+{"id":"ex4","prompt":"오늘 미팅에서 우리가 정한 결론이 뭐였지?","gold":["DECISION"]}

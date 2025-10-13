@@ -100,7 +100,7 @@ class AudioWorker(QObject):
         # 화자 연속성 추적
         self._last_speaker_id = None
         self._last_speech_time = 0.0
-        self._continuity_threshold = 3.0  # 3초 이내 발화는 같은 화자 우선 고려 (기존 8초에서 단축)
+        self._continuity_threshold = 5.0  # 5초 이내 발화는 같은 화자로 간주 (더 길게 조정)
         self._min_text_length = 3  # 최소 텍스트 길이
 
         # Embedding inference 모델 (lazy loading)
@@ -396,22 +396,44 @@ class AudioWorker(QObject):
                     pass
 
     def _smart_infer_speaker_id(self, start: float, end: float, wav_bytes: bytes, text: str) -> str:
-        """임베딩 기반 화자 ID 추론 (diarization 결과 + 화자 연속성)"""
+        """임베딩 기반 화자 ID 추론 (diarization 결과 + 화자 연속성 강화)"""
 
-        # 1. diarization 결과 확인
+        # 1. 텍스트 검증 (먼저 체크)
+        if not text or len(text.strip()) < self._min_text_length:
+            # 텍스트가 너무 짧으면 무조건 이전 화자 유지
+            if self._last_speaker_id:
+                return self._last_speaker_id
+            return "Unknown"
+
+        # 2. 화자 연속성 확인 (가장 중요! - 우선순위 상향)
+        silence_duration = start - self._last_speech_time
+
+        # 침묵이 짧으면 같은 화자일 가능성이 매우 높음 - 무조건 유지
+        if self._last_speaker_id and silence_duration <= self._continuity_threshold:
+            self._last_speech_time = end
+            # 연속성 유지 로그
+            # self.sig_status.emit(f"[화자 연속] {self._last_speaker_id} 유지 (침묵: {silence_duration:.1f}초)")
+            return self._last_speaker_id
+
+        # 3. diarization 결과 확인 (화자 변경 가능성이 있을 때만)
         overlaps = [
             (spk, ds, de, conf) for (ds, de, spk, conf) in self.state.diar_segments
             if not (end < ds or start > de)
         ]
 
-        # 2. diarization 결과가 있으면 우선 사용
+        # 4. diarization 결과가 있으면 사용
         if overlaps:
             if len(overlaps) == 1:
                 # 단일 화자
                 speaker_id = overlaps[0][0]
-                self._last_speech_time = end
-                self._last_speaker_id = speaker_id
-                return speaker_id
+                # 이전 화자와 같으면 그대로, 다르면 변경
+                if self._last_speaker_id and speaker_id == self._last_speaker_id:
+                    self._last_speech_time = end
+                    return self._last_speaker_id
+                else:
+                    self._last_speech_time = end
+                    self._last_speaker_id = speaker_id
+                    return speaker_id
             else:
                 # 여러 화자가 겹치는 경우
                 best_speaker = self._select_best_overlapping_speaker(overlaps, start, end)
@@ -420,46 +442,29 @@ class AudioWorker(QObject):
                     self._last_speaker_id = best_speaker
                     return best_speaker
 
-        # 3. 텍스트 검증
-        if not text or len(text.strip()) < self._min_text_length:
-            # 텍스트가 너무 짧으면 이전 화자 유지
-            if self._last_speaker_id:
-                return self._last_speaker_id
-            return "Unknown"
-
-        # 4. 화자 연속성 확인
-        silence_duration = start - self._last_speech_time
-
-        # 침묵이 짧으면 같은 화자일 가능성 높음
-        if self._last_speaker_id and silence_duration <= self._continuity_threshold:
-            self._last_speech_time = end
-            return self._last_speaker_id
-
-        # 5. 임베딩 기반 화자 식별 (침묵이 길거나 첫 발화인 경우)
+        # 5. 임베딩 기반 화자 식별 (침묵이 길거나 첫 발화인 경우만)
         # diarization이 비활성화되어도 임베딩 기반 식별 시도
         if wav_bytes:
             embedding = self._extract_speaker_embedding(wav_bytes)
             if embedding is not None:
-                # SpeakerManager로 화자 식별
+                # SpeakerManager로 화자 식별 (낮은 임계값 사용)
                 speaker_id, confidence = self.speaker_manager.identify_speaker(
                     embedding,
-                    threshold=0.70  # 임계값 조정 (0.75 -> 0.70)
+                    threshold=0.55  # 더 낮춘 임계값 (0.70 -> 0.55)
                 )
 
                 self._last_speaker_id = speaker_id
                 self._last_speech_time = end
                 diar_status = "활성화" if self.state.diarization_enabled else "비활성화"
-                self.sig_status.emit(f"임베딩 기반 화자 식별 (Diar {diar_status}): {speaker_id} (신뢰도: {confidence:.2f})")
+                self.sig_status.emit(f"[화자 식별] {speaker_id} (신뢰도: {confidence:.2f}, Diar: {diar_status})")
                 return speaker_id
 
         # 6. 임베딩 추출 실패 시 연속성만으로 판단
         if self._last_speaker_id:
             self._last_speech_time = end
-            self.sig_status.emit(f"[DEBUG] 임베딩 실패, 이전 화자 유지: {self._last_speaker_id}")
             return self._last_speaker_id
 
         # 7. 최후 수단: Unknown
-        self.sig_status.emit(f"[DEBUG] 모든 식별 실패, Unknown 반환")
         return "Unknown"
 
     # ====== ASR ======

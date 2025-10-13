@@ -1,0 +1,102 @@
+{
+  "title": "meeting_20251013_104508",
+  "source_path": "C:\\Persona-AI\\output\\recordings\\meeting_20251013_104508.wav",
+  "created_at": "2025-10-13T10:46:34.678085",
+  "segments": [
+    {
+      "speaker": "SPEAKER_02",
+      "text": "근데 이건 오토 다이알리 제이션누르면 뭐가 되지?",
+      "start": 0.0,
+      "end": 4.4
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그게 원래는 화자 볼게요 자동으로 돼야 되는 거지",
+      "start": 4.4,
+      "end": 8.0
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "근데 이건 필요 없지 않나? 그럼 이 버튼이라는게?",
+      "start": 8.0,
+      "end": 11.2
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "누르면 어떻게 되지?",
+      "start": 11.2,
+      "end": 13.2
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "그냥 눌러 볼까?",
+      "start": 13.2,
+      "end": 15.8
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "눌러 놔야 되는 건지 안 눌러도 되는 건지인데",
+      "start": 15.8,
+      "end": 20.4
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "원래는 눌러 놓는 게 맞는 거죠",
+      "start": 20.4,
+      "end": 23.1
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "어쨌든 나는 지금 스피커 0이고",
+      "start": 23.1,
+      "end": 26.1
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "선생님 스피커 0일인가? 안 되네",
+      "start": 26.1,
+      "end": 30.8
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "원래 그게 맞는 거지",
+      "start": 30.8,
+      "end": 33.83
+    },
+    {
+      "speaker": "SPEAKER_02",
+      "text": "새로운 화자를 찾기는 했는데 왔다갔다 안 되는구나",
+      "start": 33.83,
+      "end": 37.63
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "이게 또 웃긴 게",
+      "start": 37.63,
+      "end": 40.63
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "여기서는 계속 화자볼래 잘 안 되잖아요",
+      "start": 40.63,
+      "end": 43.93
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "잠깐 멈추도 되나?",
+      "start": 43.93,
+      "end": 45.63
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "이거 잠깐 샘플로 할게요",
+      "start": 45.63,
+      "end": 47.33
+    }
+  ],
+  "summary": "[SPEAKER_00] 그게 원래는 화자 볼게요 자동으로 돼야 되는 거지\n[SPEAKER_02] 근데 이건 필요 없지 않나? 그럼 이 버튼이라는게?\n[SPEAKER_02] 누르면 어떻게 되지?\n[SPEAKER_02] 그냥 눌러 볼까?\n[SPEAKER_00] 눌러 놔야 되는 건지 안 눌러도 되는 건지인데\n[SPEAKER_00] 원래는 눌러 놓는 게 맞는 거죠\n[SPEAKER_02] 어쨌든 나는 지금 스피커 0이고\n[SPEAKER_02] 선생님 스피커 0일인가? 안 되네\n[SPEAKER_01] 원래 그게 맞는 거지\n[SPEAKER_02] 새로운 화자를 찾기는 했는데 왔다갔다 안 되는구나\n[SPEAKER_01] 이게 또 웃긴 게\n[SPEAKER_01] 여기서는 계속 화자볼래 잘 안 되잖아요\n[SPEAKER_01] 잠깐 멈추도 되나?\n[SPEAKER_01] 이거 잠깐 샘플로 할게요",
+  "actions": "",
+  "asr_model": "small",
+  "device": "cuda",
+  "diarization": true
+}

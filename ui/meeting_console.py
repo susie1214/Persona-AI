@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
     QDateTimeEdit,
     QTextEdit,
     QDockWidget,
+    QCalendarWidget,
+    QDateEdit,
 )
 
 from ui.survey_wizard import PersonaSurveyWizard
@@ -33,7 +35,14 @@ from ui.meeting_settings import MeetingSettingsWidget
 
 from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
 from core.diarization import DiarizationWorker
-from core.summarizer import simple_summarize, extract_actions
+# ✅ 요약/액션/HTML/안건 추출 유틸 불러오기
+from core.summarizer import (
+    # simple_summarize, extract_actions,  # 기존 참조 유지
+    render_summary_html_from_segments,
+    actions_from_segments,
+    render_actions_table_html,
+    extract_agenda,
+)
 from core.rag_store import RagStore
 from core.adapter import AdapterManager
 from core.speaker import SpeakerManager
@@ -133,16 +142,14 @@ class MeetingConsole(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
         self._build_live_tab()
-        # self._build_timeline_tab()
-        # self._build_qa_tab()
-        self._build_action_tab()
+        
 
         # 회의록 탭 (업로드 → 요약/회의록 저장/복사)
-        self.meeting_notes = MeetingNotesView(self)
-        self.tabs.addTab(self.meeting_notes, "Minutes")
-        
+        # self.meeting_notes = MeetingNotesView(self)
+        # self.tabs.addTab(self.meeting_notes, "Minutes")
+        self._build_minutes_tab()
+        self._build_action_tab()
         self._build_settings_tab()
-
         self._apply_theme()
 
         # 우측 개인 챗봇 도크
@@ -161,6 +168,32 @@ class MeetingConsole(QMainWindow):
         # self.survey.show()
 
     # ---------------- UI builders ----------------
+    def _build_minutes_tab(self):
+        """Minutes 탭: 회의 전체요약 + Action Items를 이 탭에서 표시"""
+        root = QWidget()
+        L = QVBoxLayout(root)
+
+        # 기존 회의록 뷰(있으면 상단에 배치)
+        try:
+            self.meeting_notes = MeetingNotesView(self)
+            L.addWidget(self.meeting_notes)
+        except Exception:
+            pass
+
+        # 요약 영역
+        L.addWidget(QLabel("회의 전체요약"))
+        self.txt_summary = QTextEdit()
+        self.txt_summary.setReadOnly(True)        # 필요 시 읽기전용
+        L.addWidget(self.txt_summary)
+
+        # 액션 아이템 영역
+        L.addWidget(QLabel("Action Items"))
+        self.txt_actions = QTextEdit()
+        self.txt_actions.setReadOnly(True)
+        L.addWidget(self.txt_actions)
+
+        self.tabs.addTab(root, "Minutes")
+
     def _build_live_tab(self):
         self.live_root = QWidget()
         L = QVBoxLayout(self.live_root)
@@ -180,11 +213,6 @@ class MeetingConsole(QMainWindow):
 
         # mid bar
         mid = QHBoxLayout()
-        # mid.addWidget(QLabel("Forced Speaker:"))
-        # self.cmb_forced = QComboBox()
-        # self.cmb_forced.addItem("None")
-        # mid.addWidget(self.cmb_forced)
-
         self.chk_diar = QCheckBox("Auto Diarization (pyannote)")
         self.chk_diar.setChecked(self.state.diarization_enabled)
         mid.addWidget(self.chk_diar)
@@ -225,15 +253,6 @@ class MeetingConsole(QMainWindow):
         self.btn_stop.clicked.connect(self.on_stop)
         self.btn_sum.clicked.connect(self.on_summarize)
         self.btn_add2rag.clicked.connect(self.on_index_to_rag)
-        # self.cmb_forced.currentTextChanged.connect(self.on_forced_changed)
-        # self.chk_diar.stateChanged.connect(self.on_diar_toggle)
-
-    # def _build_timeline_tab(self):
-    #     self.timeline_root = QWidget()
-    #     L = QVBoxLayout(self.timeline_root)
-    #     self.timeline = QListWidget()
-    #     L.addWidget(self.timeline)
-    #     self.tabs.addTab(self.timeline_root, "Timeline")
 
     def _build_qa_tab(self):
         root = QWidget()
@@ -270,39 +289,274 @@ class MeetingConsole(QMainWindow):
 
     def _build_action_tab(self):
         root = QWidget()
-        L = QVBoxLayout(root)
+        H = QHBoxLayout(root)
 
-        L.addWidget(QLabel("회의 전체요약"))
-        self.txt_summary = QTextEdit()
-        L.addWidget(self.txt_summary)
+        # ================== LEFT: Calendar + Form ==================
+        left = QWidget()
+        L = QVBoxLayout(left)
 
-        L.addWidget(QLabel("Action Items"))
-        self.txt_actions = QTextEdit()
-        L.addWidget(self.txt_actions)
+        # Calendar header: Year/Month selectors (민트/화이트/옐로 테마)
+        header = QHBoxLayout()
+        self.cmb_year = QComboBox()
+        self.cmb_month = QComboBox()
+        y0 = datetime.datetime.now().year
+        for y in range(y0 - 2, y0 + 4):
+            self.cmb_year.addItem(str(y))
+        for m in range(1, 13):
+            self.cmb_month.addItem(f"{m:02d}")
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("다음 회의 시작"))
-        self.dt_start = QDateTimeEdit(calendarPopup = True)
-        self.dt_start.setDateTime(QDateTime.currentDateTime().addDays(7))
+        header.addWidget(QLabel("Year"))
+        header.addWidget(self.cmb_year)
+        header.addSpacing(8)
+        header.addWidget(QLabel("Month"))
+        header.addWidget(self.cmb_month)
+        header.addStretch(1)
+        L.addLayout(header)
+
+        # Big calendar
+        from PySide6.QtWidgets import QCalendarWidget
+        self.calendar = QCalendarWidget()
+        self.calendar.setGridVisible(True)
+        # mint-ish style hints
+        self.calendar.setStyleSheet(f"""
+            QCalendarWidget QToolButton {{
+                background-color: {THEME['btn']};
+                border: 1px solid {THEME['btn_border']};
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-weight: 600;
+            }}
+            QCalendarWidget QToolButton:hover {{ background-color: {THEME['btn_hover']}; }}
+            QCalendarWidget QWidget {{ alternate-background-color: {THEME['light_bg']}; }}
+            QCalendarWidget QAbstractItemView:enabled {{
+                color: #2f6;
+                selection-background-color: {THEME['pane']};
+                selection-color: #000;
+            }}
+        """)
+        L.addWidget(self.calendar, stretch=1)
+
+        # Form: 회의/프로젝트/장소 등
+        form = QFormLayout()
+        self.edit_title = QLineEdit()
+        self.edit_title.setPlaceholderText("회의 주제 / 프로젝트명")
+        form.addRow("제목", self.edit_title)
+
+        self.edit_location = QLineEdit()
+        self.edit_location.setPlaceholderText("장소(선택)")
+        form.addRow("장소", self.edit_location)
+
+        # 회의 시작/종료 (달력 날짜와 동기화되는 시간)
+        self.dt_start = QDateTimeEdit()
+        self.dt_start.setCalendarPopup(True)
         self.dt_start.setDisplayFormat("yyyy-MM-dd HH:mm")
-        row.addWidget(self.dt_start)
 
-        row.addWidget(QLabel("종료"))
-        self.dt_end = QDateTimeEdit(calendarPopup = True)
-        self.dt_end.setDateTime(QDateTime.currentDateTime().addDays(7).addSecs(3600))
+        self.dt_end = QDateTimeEdit()
+        self.dt_end.setCalendarPopup(True)
         self.dt_end.setDisplayFormat("yyyy-MM-dd HH:mm")
-        row.addWidget(self.dt_end)
 
-        self.btn_sched_memo = QPushButton("Make Schedule Memo")
-        row.addWidget(self.btn_sched_memo)
-        L.addLayout(row)
+        today = QDateTime.currentDateTime()
+        self.dt_start.setDateTime(today.addDays(7))
+        self.dt_end.setDateTime(today.addDays(7).addSecs(3600))
 
-        L.addWidget(QLabel("다음 회의 메모"))
+        form.addRow("회의 시작", self.dt_start)
+        form.addRow("회의 종료", self.dt_end)
+
+        # 프로젝트 시작/마감, 결제일
+        self.d_project_start = QDateEdit()
+        self.d_project_start.setCalendarPopup(True)
+        self.d_project_start.setDisplayFormat("yyyy-MM-dd")
+        self.d_project_start.setDate(self.dt_start.date())
+
+        self.d_project_due = QDateEdit()
+        self.d_project_due.setCalendarPopup(True)
+        self.d_project_due.setDisplayFormat("yyyy-MM-dd")
+        self.d_project_due.setDate(self.dt_start.date().addDays(30))
+
+        self.d_payment_due = QDateEdit()
+        self.d_payment_due.setCalendarPopup(True)
+        self.d_payment_due.setDisplayFormat("yyyy-MM-dd")
+        self.d_payment_due.setDate(self.dt_start.date().addDays(14))
+
+        form.addRow("프로젝트 시작", self.d_project_start)
+        form.addRow("프로젝트 마감", self.d_project_due)
+        form.addRow("결제일", self.d_payment_due)
+
+        L.addLayout(form)
+
+        H.addWidget(left, stretch=3)
+
+        # ================== RIGHT: Schedule Memo + To-do ==================
+        right = QWidget()
+        R = QVBoxLayout(right)
+
+        # Schedule memo
+        R.addWidget(QLabel("Schedule Memo"))
         self.txt_sched = QTextEdit()
-        L.addWidget(self.txt_sched)
+        self.txt_sched.setPlaceholderText("자동 생성되며, 직접 수정도 가능해요.")
+        R.addWidget(self.txt_sched, stretch=1)
+
+        # To-do list (간단 추가/삭제)
+        todo_row = QHBoxLayout()
+        todo_row.addWidget(QLabel("To-do"))
+        self.edit_todo = QLineEdit()
+        self.edit_todo.setPlaceholderText("할 일을 입력하고 +를 누르세요")
+        self.btn_todo_add = QPushButton("+")
+        self.btn_todo_del = QPushButton("−")
+        todo_row.addWidget(self.edit_todo, stretch=1)
+        todo_row.addWidget(self.btn_todo_add)
+        todo_row.addWidget(self.btn_todo_del)
+        R.addLayout(todo_row)
+
+        self.list_todo = QListWidget()
+        R.addWidget(self.list_todo, stretch=1)
+
+        # Generate button
+        gen = QHBoxLayout()
+        self.btn_sched_memo = QPushButton("Make Schedule Memo")
+        gen.addStretch(1)
+        gen.addWidget(self.btn_sched_memo)
+        R.addLayout(gen)
+
+        H.addWidget(right, stretch=2)
 
         self.tabs.addTab(root, "Schedule")
+
+        # ---------- signals ----------
+        # 연/월 콤보 → 달력 페이지 변경
+        self.cmb_year.currentTextChanged.connect(self._on_year_month_changed)
+        self.cmb_month.currentTextChanged.connect(self._on_year_month_changed)
+
+        # 달력 날짜 선택 → 시작/종료 날짜 부분만 해당 날짜로 갱신
+        self.calendar.selectionChanged.connect(self._on_calendar_selected)
+
+        # 시간/제목/장소 바뀌면 미리보기 즉시 갱신
+        self.dt_start.dateTimeChanged.connect(self._refresh_schedule_preview)
+        self.dt_end.dateTimeChanged.connect(self._refresh_schedule_preview)
+        self.edit_title.textChanged.connect(self._refresh_schedule_preview)
+        self.edit_location.textChanged.connect(self._refresh_schedule_preview)
+        self.d_project_start.dateChanged.connect(self._refresh_schedule_preview)
+        self.d_project_due.dateChanged.connect(self._refresh_schedule_preview)
+        self.d_payment_due.dateChanged.connect(self._refresh_schedule_preview)
+
+        # todo
+        self.btn_todo_add.clicked.connect(self._on_todo_add)
+        self.btn_todo_del.clicked.connect(self._on_todo_del)
+
+        # 메모 생성
         self.btn_sched_memo.clicked.connect(self.on_make_schedule)
+
+        # 초기 달력/콤보 동기화
+        d = self.dt_start.date()
+        self.calendar.setSelectedDate(d)
+        self.cmb_year.setCurrentText(str(d.year()))
+        self.cmb_month.setCurrentText(f"{d.month():02d}")
+
+        # 초기 미리보기
+        self._refresh_schedule_preview()
+
+    def _on_year_month_changed(self):
+        """연/월 콤보 변경 → 달력 페이지 이동"""
+        try:
+            y = int(self.cmb_year.currentText())
+            m = int(self.cmb_month.currentText())
+            self.calendar.setCurrentPage(y, m)
+        except Exception:
+            pass
+
+    def _on_calendar_selected(self):
+        """달력에서 날짜 선택 → 시작/종료 날짜의 '날짜'만 바꾸고 시간은 유지"""
+        d = self.calendar.selectedDate()
+        start = self.dt_start.dateTime()
+        end = self.dt_end.dateTime()
+        self.dt_start.setDateTime(QDateTime(d, start.time()))
+        self.dt_end.setDateTime(QDateTime(d, end.time()))
+        # 프로젝트 시작 기본값도 동기
+        if not self.edit_title.text().strip():
+            self.d_project_start.setDate(d)
+        self._refresh_schedule_preview()
+
+    def _on_todo_add(self):
+        txt = self.edit_todo.text().strip()
+        if not txt:
+            return
+        self.list_todo.addItem(txt)
+        self.edit_todo.clear()
+        self._refresh_schedule_preview()
+
+    def _on_todo_del(self):
+        for it in self.list_todo.selectedItems():
+            self.list_todo.takeItem(self.list_todo.row(it))
+        self._refresh_schedule_preview()
+
+    def _refresh_schedule_preview(self):
+        """우측 Schedule Memo 영역 자동 갱신(읽기/쓰기 가능하므로 기본 템플릿만 갱신)"""
+        s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm")
+        e = self.dt_end.dateTime().toString("yyyy-MM-dd HH:mm")
+        title = self.edit_title.text().strip() or "(제목 미정)"
+        loc = self.edit_location.text().strip()
+        pj_s = self.d_project_start.date().toString("yyyy-MM-dd")
+        pj_d = self.d_project_due.date().toString("yyyy-MM-dd")
+        pay = self.d_payment_due.date().toString("yyyy-MM-dd")
+
+        todos = [self.list_todo.item(i).text() for i in range(self.list_todo.count())]
+        todo_block = "\n".join([f"• {t}" for t in todos]) if todos else "• (등록된 To-do 없음)"
+
+        memo = (
+            f"[일정]\n"
+            f"- 회의: {s} ~ {e}\n"
+            f"- 제목: {title}\n"
+            f"- 장소: {loc or '-'}\n\n"
+            f"[프로젝트]\n"
+            f"- 시작: {pj_s}\n"
+            f"- 마감: {pj_d}\n"
+            f"- 결제일: {pay}\n\n"
+            f"[To-do]\n{todo_block}\n"
+        )
+        # 사용자가 수동 편집했더라도 기본 베이스를 항상 다시 깔아주고 싶다면 setPlainText,
+        # 수동 편집을 보존하고 싶다면 현재 텍스트가 비어 있을 때만 세팅하세요.
+        self.txt_sched.setPlainText(memo)
+
+
+    # def _build_action_tab(self):
+    #     root = QWidget()
+    #     L = QVBoxLayout(root)
+
+    #     L.addWidget(QLabel("회의 전체요약"))
+    #     self.txt_summary = QTextEdit()
+    #     L.addWidget(self.txt_summary)
+
+    #     L.addWidget(QLabel("Action Items"))
+    #     self.txt_actions = QTextEdit()
+    #     L.addWidget(self.txt_actions)
+
+    #     row = QHBoxLayout()
+    #     row.addWidget(QLabel("다음 회의 시작"))
+    #     self.dt_start = QDateTimeEdit()
+    #     self.dt_start.setCalendarPopup(True)
+    #     self.dt_start.setKeyboardTracking(True)
+    #     self.dt_start.setDateTime(QDateTime.currentDateTime().addDays(7))
+    #     self.dt_start.setDisplayFormat("yyyy-MM-dd HH:mm")
+    #     row.addWidget(self.dt_start)
+
+    #     row.addWidget(QLabel("종료"))
+    #     self.dt_end = QDateTimeEdit()
+    #     self.dt_end.setCalendarPopup(True)
+    #     self.dt_end.setKeyboardTracking(True)
+    #     self.dt_end.setDateTime(QDateTime.currentDateTime().addDays(7).addSecs(3600))
+    #     self.dt_end.setDisplayFormat("yyyy-MM-dd HH:mm")
+    #     row.addWidget(self.dt_end)
+
+    #     self.btn_sched_memo = QPushButton("Make Schedule Memo")
+    #     row.addWidget(self.btn_sched_memo)
+    #     L.addLayout(row)
+
+    #     L.addWidget(QLabel("다음 회의 메모"))
+    #     self.txt_sched = QTextEdit()
+    #     L.addWidget(self.txt_sched)
+
+    #     self.tabs.addTab(root, "Schedule")
+    #     self.btn_sched_memo.clicked.connect(self.on_make_schedule)
 
     def _build_settings_tab(self):
         # 새로운 통합 설정 위젯 생성
@@ -462,12 +716,27 @@ class MeetingConsole(QMainWindow):
             self.on_status("Stopped.")
 
     def on_summarize(self):
-        self.state.summary = simple_summarize(self.state.live_segments, max_len=12)
-        self.state.actions = extract_actions(self.state.live_segments)
-        self.txt_summary.setText(self.state.summary)
-        self.txt_actions.setText(
-            "\n".join(self.state.actions) if self.state.actions else "(액션아이템 없음)"
+        # 1) HTML 요약 (디자인 업그레이드, 기능 동일)
+        html = render_summary_html_from_segments(
+            self.state.live_segments,
+            max_len=12,
+            meeting_title="회의 전체요약",
+            date_str=datetime.datetime.now().strftime("%Y-%m-%d"),
+            participants=sorted(set(
+                seg.speaker_name if seg.speaker_name != "Unknown" else "speaker_00"
+                for seg in self.state.live_segments
+                if getattr(seg, "text", "").strip()
+            ))
         )
+        self.state.summary = html  # state에도 저장
+        self.txt_summary.setHtml(html)  # ✅ setText → setHtml
+
+        # 2) Action Items → 표(HTML)
+        items = actions_from_segments(self.state.live_segments)
+        self.state.actions = items  # 문자열 리스트 대신 dict 리스트 저장(내부 용도)
+        actions_html = render_actions_table_html(items)
+        self.txt_actions.setHtml(actions_html)  # ✅ setText → setHtml
+
         QMessageBox.information(self, "Done", "요약/액션아이템 생성 완료")
 
     def on_index_to_rag(self):
@@ -477,9 +746,6 @@ class MeetingConsole(QMainWindow):
         # 최근 50줄만 인덱싱 (데모)
         self.rag.upsert_segments(self.state.live_segments[-50:])
         QMessageBox.information(self, "RAG", "최근 발언을 RAG 인덱싱했습니다.")
-
-    # def on_forced_changed(self, text):
-    #     self.state.forced_speaker_name = None if (text == "None") else text
 
     def on_diar_toggle(self):
         self.state.diarization_enabled = self.chk_diar.isChecked()
@@ -515,14 +781,46 @@ class MeetingConsole(QMainWindow):
     def on_make_schedule(self):
         s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm")
         e = self.dt_end.dateTime().toString("HH:mm")
+        title = self.edit_title.text().strip()
+        loc = self.edit_location.text().strip()
+
+        # 1) 자동 안건 추출
+        agenda_list = extract_agenda(self.state.live_segments, max_items=5)
+        agenda_line = " · ".join(agenda_list) if agenda_list else "-"
+
+        # 2) 기한 있는 Action Item 정리(있으면 덧붙임)
+        lines = []
+        for ai in (self.state.actions or []):
+            due = ai.get("due")
+            if due:
+                owner = ai.get("owner", "")
+                t = ai.get("title", "")
+                lines.append(f"[{due}] {t} — {owner}")
+        ai_block = ("\n" + "\n".join(lines)) if lines else ""
+
+        pj_s = self.d_project_start.date().toString("yyyy-MM-dd")
+        pj_d = self.d_project_due.date().toString("yyyy-MM-dd")
+        pay  = self.d_payment_due.date().toString("yyyy-MM-dd")
+
+        participants = ', '.join(sorted(set(
+            seg.speaker_name for seg in self.state.live_segments if seg.speaker_name != "Unknown"
+        ))) or "-"
+
         memo = (
-            f"다음 회의: {s} ~ {e}\n"
-            f"참석자: {', '.join(sorted(set([seg.speaker_name for seg in self.state.live_segments if seg.speaker_name!='Unknown'])))}\n"
-            f"안건: 액션아이템 점검"
+            f"회의: {s} ~ {e}\n"
+            f"제목: {title}\n"
+            f"장소: {loc or '-'}\n"
+            f"참석자: {participants}\n"
+            f"안건: {agenda_line}{ai_block}\n\n"
+            f"[프로젝트]\n"
+            f"- 시작: {pj_s}\n"
+            f"- 마감: {pj_d}\n"
+            f"- 결제일: {pay}\n"
         )
+
         self.state.schedule_note = memo
-        self.txt_sched.setText(memo)
-        QMessageBox.information(self, "메모 생성", "다음 회의 메모를 작성했습니다.")
+        self.txt_sched.setPlainText(memo)
+        QMessageBox.information(self, "메모 생성", "스케줄 메모를 갱신했습니다.")
 
     def save_speaker_mapping(self):
         """화자 매핑 정보를 JSON 파일로 저장"""
@@ -624,15 +922,6 @@ class MeetingConsole(QMainWindow):
         self.state.live_segments.append(seg)
         self.list_chat.addItem(QListWidgetItem(f"[{seg.speaker_name}] {seg.text}"))
         self.list_chat.scrollToBottom()
-        # self.timeline.addItem(
-        #     QListWidgetItem(
-        #         f"{fmt_time(seg.start)}~{fmt_time(seg.end)} | {seg.speaker_name}: {seg.text}"
-        #     )
-        # )
-        # self.timeline.scrollToBottom()
-        # 🌟 새로 추가: 화자=페르소나 자동 전환
-        # if getattr(self, "chat_panel", None):
-        #     self.chat_panel.set_active_persona(seg.speaker_name)
 
     def on_diar_done(self, results):
         """화자 분리 결과 처리 (새로운 speaker_xx 형태 ID로 처리)"""
@@ -657,7 +946,6 @@ class MeetingConsole(QMainWindow):
 
     def on_new_speaker_auto_assigned(self, speaker_name: str):
         """새로운 화자가 자동으로 할당되었을 때 처리"""
-        print(f"[DEBUG] on_new_speaker_auto_assigned called with: {speaker_name}")
         self.on_status(f"새 화자 자동 할당: {speaker_name}")
 
         # SpeakerManager의 speakers가 dict인 경우 복구
@@ -667,8 +955,6 @@ class MeetingConsole(QMainWindow):
 
         # SpeakerManager에 화자 추가 (임베딩 없이 ID만 등록)
         if speaker_name not in self.speaker_manager.speaker_mapping:
-            print(f"[DEBUG] Adding new speaker to SpeakerManager: {speaker_name}")
-            # Speaker 객체 생성 (임베딩은 나중에 추가될 수 있음)
             from core.speaker import Speaker
             new_speaker = Speaker(
                 speaker_id=speaker_name,
@@ -685,22 +971,15 @@ class MeetingConsole(QMainWindow):
                     speaker_num = int(speaker_name.split("_")[1])
                     if speaker_num >= self.speaker_manager.next_speaker_id:
                         self.speaker_manager.next_speaker_id = speaker_num + 1
-            except:
+            except Exception:
                 pass
 
-            # 저장
             self.speaker_manager.save_speakers()
             self.speaker_manager.save_speaker_mapping()
-            print(f"[DEBUG] Speaker saved. Total speakers: {len(self.speaker_manager.speakers)}")
-        else:
-            print(f"[DEBUG] Speaker {speaker_name} already exists in mapping")
 
         # 설정 탭의 화자 매핑 테이블 새로고침
         if hasattr(self, 'meeting_settings') and hasattr(self.meeting_settings, 'refresh_speaker_mapping'):
-            print(f"[DEBUG] Refreshing speaker mapping table")
             self.meeting_settings.refresh_speaker_mapping()
-        else:
-            print(f"[DEBUG] Cannot refresh speaker mapping - meeting_settings not ready")
 
     def on_speaker_mapping_changed(self, mapping: dict):
         """화자 매핑이 변경되었을 때 처리"""
@@ -729,12 +1008,10 @@ class MeetingConsole(QMainWindow):
         preview_lines = []
 
         for seg in recent_segments:
-            if seg.text.strip():
-                # speaker_XX 형태 그대로 표시
+            if getattr(seg, "text", "").strip():
                 speaker_display = seg.speaker_name
                 if speaker_display == "Unknown":
                     speaker_display = "speaker_00"
-
                 preview_lines.append(f"[{speaker_display}] {seg.text}")
 
         if preview_lines:
