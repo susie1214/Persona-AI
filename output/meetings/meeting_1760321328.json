@@ -1,0 +1,498 @@
+{
+  "title": "meeting_20251013_104842",
+  "source_path": "C:\\Persona-AI\\output\\recordings\\meeting_20251013_104842.wav",
+  "created_at": "2025-10-13T11:08:48.272039",
+  "segments": [
+    {
+      "speaker": "SPEAKER_01",
+      "text": "이게 화저불리 오토 다이어리 제이션을 눌러놓고 시작하는 회의입니다.",
+      "start": 1.65,
+      "end": 10.53
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "제 11차 회의이고요.",
+      "start": 10.53,
+      "end": 14.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "11차 맞아?",
+      "start": 14.29,
+      "end": 16.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "네.",
+      "start": 16.29,
+      "end": 18.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "12차인 줄 알았는데?",
+      "start": 18.29,
+      "end": 20.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그럼 얘기해보세요.",
+      "start": 20.29,
+      "end": 22.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "일단은...",
+      "start": 22.29,
+      "end": 25.79
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그러니까 결론은 그거야.",
+      "start": 25.79,
+      "end": 27.79
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "네. 어떻게 할 거냐.",
+      "start": 27.79,
+      "end": 31.65
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "일단 노이를 만들어.",
+      "start": 31.65,
+      "end": 33.65
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "노이를 그대로 만들어놓고",
+      "start": 34.29,
+      "end": 36.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그 다음에 생각을 해보자.",
+      "start": 36.29,
+      "end": 38.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "노이가 지금 로라는 아니지만",
+      "start": 38.29,
+      "end": 40.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "로라처럼 하고 있는 거야.",
+      "start": 40.29,
+      "end": 42.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "사실 노이는.",
+      "start": 42.29,
+      "end": 44.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "회사의 로라는 거야.",
+      "start": 44.29,
+      "end": 46.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "회의의 로라.",
+      "start": 46.29,
+      "end": 48.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "회사의 로라는 아니죠.",
+      "start": 48.29,
+      "end": 50.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "회의의 로라는 거지.",
+      "start": 50.29,
+      "end": 52.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "아니지. 그건 이미 레그가 끝이라니까.",
+      "start": 52.29,
+      "end": 54.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그럼 로라가 없어?",
+      "start": 54.29,
+      "end": 56.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "없어요.",
+      "start": 56.29,
+      "end": 58.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "우리는 제목 자체가 페르소나 AI인데",
+      "start": 58.29,
+      "end": 60.29
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "페르소나가 없으면 무슨 소용이야.",
+      "start": 60.29,
+      "end": 62.29
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그러니까 내가 계속 물어봤잖아.",
+      "start": 65.84,
+      "end": 67.84
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "내가 이게 나를 지향을 하는 건지",
+      "start": 67.84,
+      "end": 74.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "아니면은",
+      "start": 74.07,
+      "end": 76.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "본인이 얘기했던 대로",
+      "start": 76.07,
+      "end": 78.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "회의의 서포트 개념으로",
+      "start": 78.07,
+      "end": 80.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "자동 수기",
+      "start": 80.07,
+      "end": 82.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "내가 수기라기보다는",
+      "start": 82.07,
+      "end": 84.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "저거 뭐냐 저거",
+      "start": 84.07,
+      "end": 86.07
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "서기.",
+      "start": 86.07,
+      "end": 89.45
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "계속 들어가기를 원하는 건지",
+      "start": 89.45,
+      "end": 91.45
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "근데 이제 로라 자체가",
+      "start": 91.45,
+      "end": 93.45
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "뭐였지?",
+      "start": 93.45,
+      "end": 96.76
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "로라가 뭐냐 라는 게 개념적 질문인 거예요?",
+      "start": 96.76,
+      "end": 98.76
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "아니면",
+      "start": 98.76,
+      "end": 100.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "로라 자체가 전체를 하기가",
+      "start": 100.76,
+      "end": 102.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "어려우니까 우리가 맞춤",
+      "start": 102.76,
+      "end": 104.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "파인 튜닝 같은 개념이라고 했어?",
+      "start": 104.76,
+      "end": 106.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그러니까 내 말은",
+      "start": 106.76,
+      "end": 108.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "어쨌든 우리가 회의를 했잖아?",
+      "start": 108.76,
+      "end": 110.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "이게 회의를 위한 거였잖아?",
+      "start": 110.76,
+      "end": 112.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "아니면 혹은",
+      "start": 112.76,
+      "end": 114.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "뭐 강의 녹음이라든지",
+      "start": 114.76,
+      "end": 116.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "녹음 기능이 들어가는 거지.",
+      "start": 116.76,
+      "end": 118.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그러니까 이 녹음된 내용의",
+      "start": 118.76,
+      "end": 120.76
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "로라를 만들 수는 없을까?",
+      "start": 120.76,
+      "end": 122.76
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그렇게 하면 되는 거 아니야?",
+      "start": 122.76,
+      "end": 124.76
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "내용의 로라는 안 되죠.",
+      "start": 124.76,
+      "end": 132.74
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "난 지금 그 질문은",
+      "start": 132.74,
+      "end": 134.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "지금 VSCOD에서",
+      "start": 134.74,
+      "end": 136.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "클로드를 갖다 쓰잖아.",
+      "start": 136.74,
+      "end": 138.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그런 것처럼.",
+      "start": 138.74,
+      "end": 140.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "우리는 이 회의 웹에서",
+      "start": 140.74,
+      "end": 142.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "얘를 갖다 쓰는 거야.",
+      "start": 142.74,
+      "end": 144.74
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "근데 그게 이미",
+      "start": 144.74,
+      "end": 146.74
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "그거는 레그라니까?",
+      "start": 146.74,
+      "end": 148.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "얘들아도?",
+      "start": 148.74,
+      "end": 150.74
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "안녕하세요.",
+      "start": 150.74,
+      "end": 152.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "네",
+      "start": 154.74,
+      "end": 156.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "잘 보내셨어요?",
+      "start": 156.74,
+      "end": 158.74
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "뭐?",
+      "start": 158.74,
+      "end": 162.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그러면은 한 팀님인",
+      "start": 164.15,
+      "end": 166.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "클로드한테 물어봐.",
+      "start": 166.15,
+      "end": 168.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "우리가 지금 이런 상황인데",
+      "start": 168.15,
+      "end": 170.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "로라를 어떻게 써야 돼?",
+      "start": 170.15,
+      "end": 172.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "나는 GPT한테 물어볼게.",
+      "start": 172.15,
+      "end": 174.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "그거는 인간의 분해로 해결할 수",
+      "start": 174.15,
+      "end": 176.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "없는 문제이기 때문에",
+      "start": 176.15,
+      "end": 178.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "GPT의 도움을 받아야 돼.",
+      "start": 178.15,
+      "end": 180.15
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "GPT에 도움을 해놔도",
+      "start": 180.15,
+      "end": 182.15
+    },
+    {
+      "speaker": "SPEAKER_00",
+      "text": "어쨌든 사람 머리가 나온다.",
+      "start": 182.15,
+      "end": 184.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "이거 카운트 된다.",
+      "start": 184.15,
+      "end": 186.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "스피커 6야?",
+      "start": 186.15,
+      "end": 188.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "해봤자 교수님이 하면",
+      "start": 188.15,
+      "end": 190.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "3명만 나와야 되잖아.",
+      "start": 190.15,
+      "end": 192.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "근데 0번부터니까 0,1,2까지만 나왔어야 되는데.",
+      "start": 192.15,
+      "end": 194.15
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "고질적인 문제가",
+      "start": 194.15,
+      "end": 197.69
+    },
+    {
+      "speaker": "SPEAKER_01",
+      "text": "해결이 안 되네요.",
+      "start": 197.69,
+      "end": 199.69
+    }
+  ],
+  "summary": "[SPEAKER_01] 로라를 어떻게 써야 돼?\n[SPEAKER_01] 나는 GPT한테 물어볼게.\n[SPEAKER_01] 그거는 인간의 분해로 해결할 수\n[SPEAKER_01] 없는 문제이기 때문에\n[SPEAKER_01] GPT의 도움을 받아야 돼.\n[SPEAKER_00] GPT에 도움을 해놔도\n[SPEAKER_00] 어쨌든 사람 머리가 나온다.\n[SPEAKER_01] 이거 카운트 된다.\n[SPEAKER_01] 스피커 6야?\n[SPEAKER_01] 해봤자 교수님이 하면\n[SPEAKER_01] 3명만 나와야 되잖아.\n[SPEAKER_01] 근데 0번부터니까 0,1,2까지만 나왔어야 되는데.\n[SPEAKER_01] 고질적인 문제가\n[SPEAKER_01] 해결이 안 되네요.",
+  "actions": "- [SPEAKER_01] 이게 화저불리 오토 다이어리 제이션을 눌러놓고 시작하는 회의입니다.\n- [SPEAKER_01] 제 11차 회의이고요.\n- [SPEAKER_01] 회의의 로라.\n- [SPEAKER_01] 회의의 로라는 거지.\n- [SPEAKER_00] 회의의 서포트 개념으로\n- [SPEAKER_01] 어쨌든 우리가 회의를 했잖아?\n- [SPEAKER_01] 이게 회의를 위한 거였잖아?\n- [SPEAKER_01] 우리는 이 회의 웹에서",
+  "asr_model": "medium",
+  "device": "cuda",
+  "diarization": true
+}
