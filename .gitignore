@@ -1,0 +1,13 @@
+__pycache__
+*/__pycache__
+
+# 
+deprecated
+samples
+
+# 가상환경
+venv
+
+.env
+
+.claude
