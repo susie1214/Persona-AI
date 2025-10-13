@@ -20,7 +20,7 @@ class _SummWorker(QObject):
         try:
             # mp3/wav/mp4/m4a 등 ffmpeg로 처리됨
             res = process_audio_file(
-                self.path, asr_model="small", use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
+                self.path, asr_model="medium", use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
                 diarize=True, settings=self.settings
             )
             self.sig_done.emit(res)
