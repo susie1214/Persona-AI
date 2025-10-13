@@ -53,6 +53,7 @@ class ChatDock(QWidget):
         sub.addWidget(self.btn)
         layout.addLayout(sub)
         self.btn.clicked.connect(self.on_send)
+        self.edit.returnPressed.connect(self.on_send)
         # :흰색_확인_표시: 초기 상태: 기본 챗봇 모드
         default_be = "openai:gpt-4o-mini"
         self.cmb_backend.setCurrentText(default_be)

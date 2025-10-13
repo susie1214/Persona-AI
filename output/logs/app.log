@@ -1,0 +1,737 @@
+2025-10-13 10:44:30,534 INFO Use pytorch device_name: cuda:0
+2025-10-13 10:44:30,534 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 10:45:14,528 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:14,618 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:45:15,625 WARNING Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-10-13 10:45:20,285 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:20,307 INFO VAD filter removed 00:01.904 of audio
+2025-10-13 10:45:26,289 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:26,310 INFO VAD filter removed 00:02.864 of audio
+2025-10-13 10:45:32,280 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:32,300 INFO VAD filter removed 00:03.792 of audio
+2025-10-13 10:45:38,250 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:38,259 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:45:44,330 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:44,346 INFO VAD filter removed 00:02.128 of audio
+2025-10-13 10:45:50,318 INFO Processing audio with duration 00:06.000
+2025-10-13 10:45:50,342 INFO VAD filter removed 00:02.416 of audio
+2025-10-13 10:46:07,831 WARNING Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-10-13 10:46:14,593 INFO Processing audio with duration 00:47.400
+2025-10-13 10:46:14,721 INFO VAD filter removed 00:01.632 of audio
+2025-10-13 10:46:17,302 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 10:46:17,302 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 10:46:17,303 DEBUG Registered checkpoint save hook for save
+2025-10-13 10:46:17,303 DEBUG Registered checkpoint load hook for load
+2025-10-13 10:46:17,327 INFO Applied quirks (see `speechbrain.utils.quirks`): [disable_jit_profiling, allow_tf32]
+2025-10-13 10:46:17,327 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 10:46:17,328 DEBUG Registered checkpoint save hook for _save
+2025-10-13 10:46:17,328 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 10:46:20,349 WARNING Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-10-13 10:46:21,493 WARNING Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-10-13 10:48:15,239 INFO Processing audio with duration 00:06.000
+2025-10-13 10:48:15,255 INFO VAD filter removed 00:03.696 of audio
+2025-10-13 10:48:18,597 INFO Processing audio with duration 00:06.000
+2025-10-13 10:48:18,613 INFO VAD filter removed 00:00.080 of audio
+2025-10-13 10:48:35,180 INFO Use pytorch device_name: cuda:0
+2025-10-13 10:48:35,180 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 10:48:43,260 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 10:48:43,260 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 10:48:43,260 DEBUG Registered checkpoint save hook for save
+2025-10-13 10:48:43,260 DEBUG Registered checkpoint load hook for load
+2025-10-13 10:48:43,358 INFO Applied quirks (see `speechbrain.utils.quirks`): [disable_jit_profiling, allow_tf32]
+2025-10-13 10:48:43,360 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 10:48:43,360 DEBUG Registered checkpoint save hook for _save
+2025-10-13 10:48:43,360 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 10:48:48,913 INFO Processing audio with duration 00:06.000
+2025-10-13 10:48:48,994 INFO VAD filter removed 00:01.648 of audio
+2025-10-13 10:48:54,913 INFO Processing audio with duration 00:06.000
+2025-10-13 10:48:54,929 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:00,990 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:01,000 INFO VAD filter removed 00:00.496 of audio
+2025-10-13 10:49:06,990 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:07,006 INFO VAD filter removed 00:00.880 of audio
+2025-10-13 10:49:12,967 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:12,998 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:18,946 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:18,976 INFO VAD filter removed 00:00.112 of audio
+2025-10-13 10:49:19,650 INFO Processing audio with duration 00:00.574
+2025-10-13 10:49:19,650 INFO VAD filter removed 00:00.574 of audio
+2025-10-13 10:49:24,917 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:24,933 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:30,910 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:30,928 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:36,910 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:36,932 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:42,960 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:42,980 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:49:48,959 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:48,977 INFO VAD filter removed 00:03.568 of audio
+2025-10-13 10:49:54,966 INFO Processing audio with duration 00:06.000
+2025-10-13 10:49:55,010 INFO VAD filter removed 00:03.168 of audio
+2025-10-13 10:50:00,970 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:00,990 INFO VAD filter removed 00:00.048 of audio
+2025-10-13 10:50:06,911 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:06,930 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:50:12,971 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:12,990 INFO VAD filter removed 00:03.920 of audio
+2025-10-13 10:50:18,990 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:19,011 INFO VAD filter removed 00:00.240 of audio
+2025-10-13 10:50:24,915 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:24,930 INFO VAD filter removed 00:00.528 of audio
+2025-10-13 10:50:30,924 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:30,939 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:50:37,017 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:37,051 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:50:42,920 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:42,948 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:50:48,990 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:49,013 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:50:54,920 INFO Processing audio with duration 00:06.000
+2025-10-13 10:50:54,936 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 10:51:00,919 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:00,932 INFO VAD filter removed 00:00.176 of audio
+2025-10-13 10:51:06,910 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:06,924 INFO VAD filter removed 00:00.048 of audio
+2025-10-13 10:51:12,977 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:13,003 INFO VAD filter removed 00:00.688 of audio
+2025-10-13 10:51:18,953 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:18,979 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:51:24,940 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:24,980 INFO VAD filter removed 00:00.464 of audio
+2025-10-13 10:51:30,928 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:30,938 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:51:36,919 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:36,934 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:51:42,891 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:42,913 INFO VAD filter removed 00:00.304 of audio
+2025-10-13 10:51:48,892 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:48,910 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:51:54,950 INFO Processing audio with duration 00:06.000
+2025-10-13 10:51:54,972 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 10:52:00,940 INFO Processing audio with duration 00:06.000
+2025-10-13 10:52:00,982 INFO VAD filter removed 00:01.408 of audio
+2025-10-13 10:52:34,603 INFO Processing audio with duration 03:20.600
+2025-10-13 10:52:35,144 INFO VAD filter removed 00:22.768 of audio
+2025-10-13 11:00:21,219 INFO Use pytorch device_name: cuda:0
+2025-10-13 11:00:21,219 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 11:00:34,094 INFO Processing audio with duration 03:20.600
+2025-10-13 11:00:34,686 INFO VAD filter removed 00:22.768 of audio
+2025-10-13 11:00:38,611 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 11:00:38,611 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 11:00:38,611 DEBUG Registered checkpoint save hook for save
+2025-10-13 11:00:38,611 DEBUG Registered checkpoint load hook for load
+2025-10-13 11:00:38,708 INFO Applied quirks (see `speechbrain.utils.quirks`): [disable_jit_profiling, allow_tf32]
+2025-10-13 11:00:38,708 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 11:00:38,708 DEBUG Registered checkpoint save hook for _save
+2025-10-13 11:00:38,708 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 11:00:51,266 ERROR UNCAUGHT EXCEPTION:
+Traceback (most recent call last):
+  File "c:\Persona-AI\ui\meeting_console.py", line 721, in _refresh_preview
+    def _refresh_preview(self):
+    
+KeyboardInterrupt
+
+2025-10-13 11:02:03,452 INFO Use pytorch device_name: cuda:0
+2025-10-13 11:02:03,452 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 11:02:18,637 INFO Processing audio with duration 03:20.600
+2025-10-13 11:02:19,244 INFO VAD filter removed 00:22.768 of audio
+2025-10-13 11:02:23,934 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 11:02:23,934 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 11:02:23,934 DEBUG Registered checkpoint save hook for save
+2025-10-13 11:02:23,934 DEBUG Registered checkpoint load hook for load
+2025-10-13 11:02:24,024 INFO Applied quirks (see `speechbrain.utils.quirks`): [disable_jit_profiling, allow_tf32]
+2025-10-13 11:02:24,025 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 11:02:24,025 DEBUG Registered checkpoint save hook for _save
+2025-10-13 11:02:24,025 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 11:07:25,118 INFO Use pytorch device_name: cuda:0
+2025-10-13 11:07:25,118 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 11:07:41,232 INFO Processing audio with duration 03:20.600
+2025-10-13 11:07:41,829 INFO VAD filter removed 00:22.768 of audio
+2025-10-13 11:07:48,409 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 11:07:48,409 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 11:07:48,409 DEBUG Registered checkpoint save hook for save
+2025-10-13 11:07:48,409 DEBUG Registered checkpoint load hook for load
+2025-10-13 11:07:48,500 INFO Applied quirks (see `speechbrain.utils.quirks`): [allow_tf32, disable_jit_profiling]
+2025-10-13 11:07:48,501 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 11:07:48,501 DEBUG Registered checkpoint save hook for _save
+2025-10-13 11:07:48,501 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 11:09:58,268 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 11:10:41,390 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 11:11:12,837 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 11:26:23,004 INFO Use pytorch device_name: cuda:0
+2025-10-13 11:26:23,004 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 11:26:47,083 INFO Processing audio with duration 00:06.000
+2025-10-13 11:26:47,159 INFO VAD filter removed 00:01.264 of audio
+2025-10-13 11:26:53,137 INFO Processing audio with duration 00:06.000
+2025-10-13 11:26:53,148 INFO VAD filter removed 00:03.680 of audio
+2025-10-13 11:26:59,158 INFO Processing audio with duration 00:06.000
+2025-10-13 11:26:59,174 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 11:27:05,181 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:05,197 INFO VAD filter removed 00:01.968 of audio
+2025-10-13 11:27:11,089 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:11,111 INFO VAD filter removed 00:02.384 of audio
+2025-10-13 11:27:17,182 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:17,211 INFO VAD filter removed 00:04.384 of audio
+2025-10-13 11:27:23,110 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:23,127 INFO VAD filter removed 00:02.032 of audio
+2025-10-13 11:27:29,147 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:29,166 INFO VAD filter removed 00:01.808 of audio
+2025-10-13 11:27:35,178 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:35,196 INFO VAD filter removed 00:02.432 of audio
+2025-10-13 11:27:41,120 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:41,137 INFO VAD filter removed 00:00.592 of audio
+2025-10-13 11:27:47,148 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:47,167 INFO VAD filter removed 00:00.208 of audio
+2025-10-13 11:27:53,169 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:53,187 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 11:27:59,149 INFO Processing audio with duration 00:06.000
+2025-10-13 11:27:59,165 INFO VAD filter removed 00:05.136 of audio
+2025-10-13 11:28:05,097 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:05,111 INFO VAD filter removed 00:02.752 of audio
+2025-10-13 11:28:11,104 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:11,121 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:28:17,108 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:17,121 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:28:23,123 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:23,141 INFO VAD filter removed 00:02.912 of audio
+2025-10-13 11:28:29,202 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:29,220 INFO VAD filter removed 00:03.920 of audio
+2025-10-13 11:28:35,098 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:35,107 INFO VAD filter removed 00:00.400 of audio
+2025-10-13 11:28:41,132 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:41,151 INFO VAD filter removed 00:01.552 of audio
+2025-10-13 11:28:47,115 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:47,133 INFO VAD filter removed 00:00.336 of audio
+2025-10-13 11:28:53,138 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:53,157 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:28:59,130 INFO Processing audio with duration 00:06.000
+2025-10-13 11:28:59,149 INFO VAD filter removed 00:03.952 of audio
+2025-10-13 11:29:05,149 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:05,165 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:29:11,115 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:11,134 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:29:17,169 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:17,187 INFO VAD filter removed 00:01.312 of audio
+2025-10-13 11:29:23,106 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:23,124 INFO VAD filter removed 00:01.808 of audio
+2025-10-13 11:29:29,087 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:29,105 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:29:35,168 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:35,185 INFO VAD filter removed 00:00.112 of audio
+2025-10-13 11:29:41,103 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:41,124 INFO VAD filter removed 00:01.232 of audio
+2025-10-13 11:29:47,091 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:47,109 INFO VAD filter removed 00:01.520 of audio
+2025-10-13 11:29:53,180 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:53,197 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:29:59,160 INFO Processing audio with duration 00:06.000
+2025-10-13 11:29:59,178 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:30:05,113 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:05,118 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:30:11,122 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:11,134 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:30:17,085 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:17,103 INFO VAD filter removed 00:03.440 of audio
+2025-10-13 11:30:23,109 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:23,128 INFO VAD filter removed 00:05.056 of audio
+2025-10-13 11:30:29,134 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:29,148 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 11:30:35,176 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:35,195 INFO VAD filter removed 00:04.688 of audio
+2025-10-13 11:30:41,181 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:41,201 INFO VAD filter removed 00:02.544 of audio
+2025-10-13 11:30:47,187 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:47,210 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:30:53,173 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:53,189 INFO VAD filter removed 00:00.304 of audio
+2025-10-13 11:30:59,090 INFO Processing audio with duration 00:06.000
+2025-10-13 11:30:59,107 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:05,167 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:05,187 INFO VAD filter removed 00:02.704 of audio
+2025-10-13 11:31:11,161 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:11,181 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:17,097 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:17,113 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:23,127 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:23,145 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:29,114 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:29,131 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:35,095 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:35,114 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:41,167 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:41,192 INFO VAD filter removed 00:03.792 of audio
+2025-10-13 11:31:47,147 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:47,161 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:31:53,143 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:53,165 INFO VAD filter removed 00:03.056 of audio
+2025-10-13 11:31:59,108 INFO Processing audio with duration 00:06.000
+2025-10-13 11:31:59,133 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:05,184 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:05,200 INFO VAD filter removed 00:03.616 of audio
+2025-10-13 11:32:11,092 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:11,119 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:17,087 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:17,107 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:23,168 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:23,187 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:29,103 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:29,121 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:35,166 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:35,191 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:32:41,179 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:41,198 INFO VAD filter removed 00:01.840 of audio
+2025-10-13 11:32:47,107 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:47,121 INFO VAD filter removed 00:01.200 of audio
+2025-10-13 11:32:53,104 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:53,127 INFO VAD filter removed 00:03.392 of audio
+2025-10-13 11:32:59,151 INFO Processing audio with duration 00:06.000
+2025-10-13 11:32:59,170 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:05,147 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:05,157 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 11:33:11,127 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:11,144 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:17,134 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:17,150 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:23,154 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:23,174 INFO VAD filter removed 00:01.968 of audio
+2025-10-13 11:33:29,165 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:29,186 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:35,159 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:35,176 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:41,091 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:41,109 INFO VAD filter removed 00:00.688 of audio
+2025-10-13 11:33:47,137 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:47,150 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:53,163 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:53,194 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:33:59,137 INFO Processing audio with duration 00:06.000
+2025-10-13 11:33:59,157 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:34:05,103 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:05,124 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:34:11,141 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:11,159 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:34:17,111 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:17,129 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:34:23,133 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:23,150 INFO VAD filter removed 00:03.040 of audio
+2025-10-13 11:34:29,181 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:29,202 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:34:35,087 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:35,099 INFO VAD filter removed 00:01.168 of audio
+2025-10-13 11:34:41,180 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:41,197 INFO VAD filter removed 00:03.168 of audio
+2025-10-13 11:34:47,106 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:47,134 INFO VAD filter removed 00:01.648 of audio
+2025-10-13 11:34:53,091 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:53,111 INFO VAD filter removed 00:00.144 of audio
+2025-10-13 11:34:59,125 INFO Processing audio with duration 00:06.000
+2025-10-13 11:34:59,150 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:35:05,147 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:05,168 INFO VAD filter removed 00:04.720 of audio
+2025-10-13 11:35:11,124 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:11,141 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:35:17,103 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:17,118 INFO VAD filter removed 00:05.248 of audio
+2025-10-13 11:35:23,119 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:23,142 INFO VAD filter removed 00:03.056 of audio
+2025-10-13 11:35:29,149 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:29,169 INFO VAD filter removed 00:03.520 of audio
+2025-10-13 11:35:35,118 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:35,134 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:35:41,151 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:41,167 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:35:47,097 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:47,117 INFO VAD filter removed 00:01.664 of audio
+2025-10-13 11:35:53,085 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:53,103 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 11:35:59,163 INFO Processing audio with duration 00:06.000
+2025-10-13 11:35:59,181 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 11:36:05,176 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:05,203 INFO VAD filter removed 00:01.808 of audio
+2025-10-13 11:36:11,167 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:11,189 INFO VAD filter removed 00:02.800 of audio
+2025-10-13 11:36:17,112 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:17,131 INFO VAD filter removed 00:02.384 of audio
+2025-10-13 11:36:23,146 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:23,169 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:36:29,120 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:29,141 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:36:35,127 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:35,144 INFO VAD filter removed 00:00.176 of audio
+2025-10-13 11:36:41,088 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:41,107 INFO VAD filter removed 00:00.432 of audio
+2025-10-13 11:36:47,157 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:47,177 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:36:53,118 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:53,137 INFO VAD filter removed 00:00.400 of audio
+2025-10-13 11:36:59,104 INFO Processing audio with duration 00:06.000
+2025-10-13 11:36:59,124 INFO VAD filter removed 00:00.048 of audio
+2025-10-13 11:37:05,089 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:05,107 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:37:11,139 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:11,157 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:37:17,097 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:17,117 INFO VAD filter removed 00:04.912 of audio
+2025-10-13 11:37:23,157 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:23,173 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 11:37:29,088 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:29,112 INFO VAD filter removed 00:02.656 of audio
+2025-10-13 11:37:35,160 INFO Processing audio with duration 00:06.000
+2025-10-13 11:37:35,178 INFO VAD filter removed 00:00.496 of audio
+2025-10-13 11:38:41,653 INFO Processing audio with duration 10:58.200
+2025-10-13 11:38:43,430 INFO VAD filter removed 02:46.192 of audio
+2025-10-13 11:38:59,557 DEBUG Registered checkpoint save hook for _speechbrain_save
+2025-10-13 11:38:59,557 DEBUG Registered checkpoint load hook for _speechbrain_load
+2025-10-13 11:38:59,557 DEBUG Registered checkpoint save hook for save
+2025-10-13 11:38:59,557 DEBUG Registered checkpoint load hook for load
+2025-10-13 11:38:59,590 INFO Applied quirks (see `speechbrain.utils.quirks`): [disable_jit_profiling, allow_tf32]
+2025-10-13 11:38:59,590 INFO Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+2025-10-13 11:38:59,590 DEBUG Registered checkpoint save hook for _save
+2025-10-13 11:38:59,590 DEBUG Registered checkpoint load hook for _recover
+2025-10-13 11:44:53,212 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 11:57:59,496 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 11:58:24,493 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 14:23:51,769 ERROR UNCAUGHT EXCEPTION:
+Traceback (most recent call last):
+  File "c:\Persona-AI\ui\meeting_console.py", line 725, in _refresh_preview
+    def _refresh_preview(self):
+    
+KeyboardInterrupt
+
+2025-10-13 15:32:30,618 INFO Use pytorch device_name: cuda:0
+2025-10-13 15:32:30,618 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 15:32:34,644 ERROR UNCAUGHT EXCEPTION:
+Traceback (most recent call last):
+  File "c:\Persona-AI\app.py", line 61, in <module>
+    main()
+  File "c:\Persona-AI\app.py", line 51, in main
+    win = MeetingConsole()
+          ^^^^^^^^^^^^^^^^
+  File "c:\Persona-AI\ui\meeting_console.py", line 149, in __init__
+    self.tabs.addTab(1,self.meeting_notes, "Minutes")
+TypeError: 'PySide6.QtWidgets.QTabWidget.addTab' called with wrong argument types:
+  PySide6.QtWidgets.QTabWidget.addTab(int, MeetingNotesView, str)
+Supported signatures:
+  PySide6.QtWidgets.QTabWidget.addTab(widget: PySide6.QtWidgets.QWidget, arg__2: str, /)
+  PySide6.QtWidgets.QTabWidget.addTab(widget: PySide6.QtWidgets.QWidget, icon: PySide6.QtGui.QIcon | PySide6.QtGui.QPixmap, label: str, /)
+
+2025-10-13 15:36:51,051 INFO Use pytorch device_name: cuda:0
+2025-10-13 15:36:51,051 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 15:36:55,258 ERROR UNCAUGHT EXCEPTION:
+Traceback (most recent call last):
+  File "c:\Persona-AI\app.py", line 61, in <module>
+    main()
+  File "c:\Persona-AI\app.py", line 51, in main
+    win = MeetingConsole()
+          ^^^^^^^^^^^^^^^^
+  File "c:\Persona-AI\ui\meeting_console.py", line 156, in __init__
+    self.chat_panel = ChatDock()
+                      ^^^^^^^^^^
+  File "c:\Persona-AI\ui\chat_dock.py", line 56, in __init__
+    self.input.returnPressed.connect(self.on_send)
+    ^^^^^^^^^^
+AttributeError: 'ChatDock' object has no attribute 'input'
+
+2025-10-13 15:38:43,801 INFO Use pytorch device_name: cuda:0
+2025-10-13 15:38:43,801 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 15:39:03,347 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:03,431 INFO VAD filter removed 00:00.144 of audio
+2025-10-13 15:39:09,415 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:09,433 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:39:15,341 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:15,377 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:39:21,439 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:21,457 INFO VAD filter removed 00:00.240 of audio
+2025-10-13 15:39:27,387 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:27,399 INFO VAD filter removed 00:00.208 of audio
+2025-10-13 15:39:33,344 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:33,368 INFO VAD filter removed 00:01.984 of audio
+2025-10-13 15:39:39,428 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:39,438 INFO VAD filter removed 00:00.240 of audio
+2025-10-13 15:39:45,401 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:45,416 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:39:51,439 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:51,458 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:39:57,376 INFO Processing audio with duration 00:06.000
+2025-10-13 15:39:57,393 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:03,372 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:03,392 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:09,352 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:09,368 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:15,391 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:15,411 INFO VAD filter removed 00:02.672 of audio
+2025-10-13 15:40:21,428 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:21,448 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:27,384 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:27,400 INFO VAD filter removed 00:00.816 of audio
+2025-10-13 15:40:33,355 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:33,385 INFO VAD filter removed 00:00.336 of audio
+2025-10-13 15:40:39,382 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:39,401 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:45,342 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:45,359 INFO VAD filter removed 00:01.936 of audio
+2025-10-13 15:40:51,402 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:51,431 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:40:57,421 INFO Processing audio with duration 00:06.000
+2025-10-13 15:40:57,444 INFO VAD filter removed 00:00.560 of audio
+2025-10-13 15:41:03,418 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:03,436 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 15:41:09,401 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:09,419 INFO VAD filter removed 00:03.536 of audio
+2025-10-13 15:41:15,417 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:15,431 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:41:21,353 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:21,371 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:41:27,385 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:27,406 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:41:33,433 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:33,461 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 15:41:39,384 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:39,400 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:41:45,355 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:45,373 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:41:51,384 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:51,404 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 15:41:57,400 INFO Processing audio with duration 00:06.000
+2025-10-13 15:41:57,432 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 15:42:03,388 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:03,406 INFO VAD filter removed 00:00.720 of audio
+2025-10-13 15:42:09,426 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:09,439 INFO VAD filter removed 00:01.952 of audio
+2025-10-13 15:42:15,436 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:15,454 INFO VAD filter removed 00:01.904 of audio
+2025-10-13 15:42:21,387 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:21,418 INFO VAD filter removed 00:03.632 of audio
+2025-10-13 15:42:27,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:27,458 INFO VAD filter removed 00:02.992 of audio
+2025-10-13 15:42:33,353 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:33,386 INFO VAD filter removed 00:00.752 of audio
+2025-10-13 15:42:39,399 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:39,415 INFO VAD filter removed 00:04.784 of audio
+2025-10-13 15:42:45,384 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:45,416 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 15:42:51,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:51,450 INFO VAD filter removed 00:00.784 of audio
+2025-10-13 15:42:57,395 INFO Processing audio with duration 00:06.000
+2025-10-13 15:42:57,426 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:43:03,416 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:03,439 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:43:09,400 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:09,418 INFO VAD filter removed 00:01.536 of audio
+2025-10-13 15:43:15,370 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:15,395 INFO VAD filter removed 00:00.528 of audio
+2025-10-13 15:43:21,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:21,455 INFO VAD filter removed 00:01.104 of audio
+2025-10-13 15:43:27,400 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:27,426 INFO VAD filter removed 00:00.496 of audio
+2025-10-13 15:43:33,389 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:33,405 INFO VAD filter removed 00:01.264 of audio
+2025-10-13 15:43:39,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:39,458 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:43:45,401 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:45,417 INFO VAD filter removed 00:00.112 of audio
+2025-10-13 15:43:51,418 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:51,436 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:43:57,401 INFO Processing audio with duration 00:06.000
+2025-10-13 15:43:57,423 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:44:03,368 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:03,384 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:44:09,380 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:09,398 INFO VAD filter removed 00:01.168 of audio
+2025-10-13 15:44:15,440 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:15,459 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 15:44:21,343 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:21,361 INFO VAD filter removed 00:01.232 of audio
+2025-10-13 15:44:27,441 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:27,465 INFO VAD filter removed 00:01.584 of audio
+2025-10-13 15:44:33,353 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:33,371 INFO VAD filter removed 00:03.936 of audio
+2025-10-13 15:44:39,433 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:39,449 INFO VAD filter removed 00:02.688 of audio
+2025-10-13 15:44:45,358 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:45,371 INFO VAD filter removed 00:02.160 of audio
+2025-10-13 15:44:51,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:51,447 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:44:57,426 INFO Processing audio with duration 00:06.000
+2025-10-13 15:44:57,446 INFO VAD filter removed 00:01.136 of audio
+2025-10-13 15:45:03,339 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:03,365 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:45:09,444 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:09,463 INFO VAD filter removed 00:04.912 of audio
+2025-10-13 15:45:15,443 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:15,463 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 15:45:21,343 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:21,363 INFO VAD filter removed 00:00.464 of audio
+2025-10-13 15:45:27,371 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:27,391 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:45:33,372 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:33,390 INFO VAD filter removed 00:04.528 of audio
+2025-10-13 15:45:39,371 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:39,389 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:45:45,354 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:45,385 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:45:51,373 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:51,385 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:45:57,370 INFO Processing audio with duration 00:06.000
+2025-10-13 15:45:57,388 INFO VAD filter removed 00:03.120 of audio
+2025-10-13 15:46:03,407 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:03,415 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:46:09,421 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:09,439 INFO VAD filter removed 00:03.216 of audio
+2025-10-13 15:46:15,408 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:15,433 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:46:21,401 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:21,419 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:46:27,431 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:27,455 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 15:46:33,423 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:33,441 INFO VAD filter removed 00:04.816 of audio
+2025-10-13 15:46:39,415 INFO Processing audio with duration 00:06.000
+2025-10-13 15:46:39,435 INFO VAD filter removed 00:04.944 of audio
+2025-10-13 15:47:06,068 ERROR UNCAUGHT EXCEPTION:
+Traceback (most recent call last):
+  File "c:\Persona-AI\ui\meeting_console.py", line 705, in on_summarize
+    self.txt_summary.setHtml(html)  # \u2705 setText ¡æ setHtml
+    ^^^^^^^^^^^^^^^^
+AttributeError: 'MeetingConsole' object has no attribute 'txt_summary'
+
+2025-10-13 16:07:50,141 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:08:11,228 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:08:36,622 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:10:37,959 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:14:32,007 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:14:51,821 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 16:43:34,221 INFO Use pytorch device_name: cuda:0
+2025-10-13 16:43:34,221 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 16:43:59,833 INFO Processing audio with duration 00:06.000
+2025-10-13 16:43:59,909 INFO VAD filter removed 00:00.464 of audio
+2025-10-13 16:44:05,775 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:05,793 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:44:11,803 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:11,825 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:44:17,745 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:17,772 INFO VAD filter removed 00:00.112 of audio
+2025-10-13 16:44:23,753 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:23,765 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:44:29,812 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:29,822 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:44:35,808 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:35,825 INFO VAD filter removed 00:02.544 of audio
+2025-10-13 16:44:41,734 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:41,750 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:44:47,737 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:47,755 INFO VAD filter removed 00:00.944 of audio
+2025-10-13 16:44:53,825 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:53,840 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:44:59,801 INFO Processing audio with duration 00:06.000
+2025-10-13 16:44:59,819 INFO VAD filter removed 00:00.080 of audio
+2025-10-13 16:45:05,832 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:05,849 INFO VAD filter removed 00:00.144 of audio
+2025-10-13 16:45:11,819 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:11,838 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:45:17,824 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:17,841 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:45:23,792 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:23,806 INFO VAD filter removed 00:01.008 of audio
+2025-10-13 16:45:29,799 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:29,817 INFO VAD filter removed 00:03.280 of audio
+2025-10-13 16:45:35,735 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:35,755 INFO VAD filter removed 00:00.944 of audio
+2025-10-13 16:45:41,830 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:41,851 INFO VAD filter removed 00:00.816 of audio
+2025-10-13 16:45:47,739 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:47,757 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:45:53,825 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:53,844 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:45:59,735 INFO Processing audio with duration 00:06.000
+2025-10-13 16:45:59,755 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:46:05,760 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:05,783 INFO VAD filter removed 00:02.528 of audio
+2025-10-13 16:46:11,793 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:11,813 INFO VAD filter removed 00:04.336 of audio
+2025-10-13 16:46:17,820 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:17,841 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:46:23,820 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:23,837 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:46:29,810 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:29,829 INFO VAD filter removed 00:00.176 of audio
+2025-10-13 16:46:35,820 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:35,826 INFO VAD filter removed 00:02.160 of audio
+2025-10-13 16:46:41,735 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:41,743 INFO VAD filter removed 00:01.264 of audio
+2025-10-13 16:46:47,760 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:47,785 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:46:53,759 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:53,776 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:46:59,743 INFO Processing audio with duration 00:06.000
+2025-10-13 16:46:59,765 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:47:05,742 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:05,750 INFO VAD filter removed 00:06.000 of audio
+2025-10-13 16:47:11,751 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:11,768 INFO VAD filter removed 00:05.040 of audio
+2025-10-13 16:47:17,760 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:17,777 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:47:23,775 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:23,792 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:47:29,752 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:29,771 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:47:35,743 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:35,762 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:47:41,738 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:41,752 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 16:47:47,802 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:47,819 INFO VAD filter removed 00:03.296 of audio
+2025-10-13 16:47:53,832 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:53,849 INFO VAD filter removed 00:01.008 of audio
+2025-10-13 16:47:59,740 INFO Processing audio with duration 00:06.000
+2025-10-13 16:47:59,758 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:48:05,822 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:05,839 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:48:11,776 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:11,794 INFO VAD filter removed 00:00.016 of audio
+2025-10-13 16:48:17,807 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:17,825 INFO VAD filter removed 00:05.120 of audio
+2025-10-13 16:48:23,765 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:23,788 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:48:29,799 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:29,808 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:48:35,749 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:35,759 INFO VAD filter removed 00:02.544 of audio
+2025-10-13 16:48:41,803 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:41,821 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:48:47,782 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:47,805 INFO VAD filter removed 00:00.656 of audio
+2025-10-13 16:48:53,762 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:53,776 INFO VAD filter removed 00:00.112 of audio
+2025-10-13 16:48:59,821 INFO Processing audio with duration 00:06.000
+2025-10-13 16:48:59,841 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:05,808 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:05,831 INFO VAD filter removed 00:00.080 of audio
+2025-10-13 16:49:11,747 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:11,761 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:17,776 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:17,805 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:23,805 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:23,823 INFO VAD filter removed 00:00.368 of audio
+2025-10-13 16:49:29,833 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:29,854 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:35,748 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:35,768 INFO VAD filter removed 00:01.104 of audio
+2025-10-13 16:49:41,761 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:41,775 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:47,794 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:47,812 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:53,748 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:53,766 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:49:59,807 INFO Processing audio with duration 00:06.000
+2025-10-13 16:49:59,827 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:50:05,766 INFO Processing audio with duration 00:06.000
+2025-10-13 16:50:05,776 INFO VAD filter removed 00:00.000 of audio
+2025-10-13 16:50:11,752 INFO Processing audio with duration 00:06.000
+2025-10-13 16:50:11,761 INFO VAD filter removed 00:00.176 of audio
+2025-10-13 16:50:17,842 INFO Processing audio with duration 00:06.000
+2025-10-13 16:50:17,859 INFO VAD filter removed 00:03.632 of audio
+2025-10-13 16:50:23,814 INFO Processing audio with duration 00:06.000
+2025-10-13 16:50:23,836 INFO VAD filter removed 00:02.864 of audio
+2025-10-13 17:00:45,196 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 17:01:02,619 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
