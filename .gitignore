@@ -4,6 +4,9 @@ __pycache__
 # 
 deprecated
 samples
+data
+output
+qdrant_db
 
 # 가상환경
 venv
