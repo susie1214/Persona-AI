@@ -735,3 +735,9 @@ AttributeError: 'MeetingConsole' object has no attribute 'txt_summary'
 2025-10-13 16:50:23,836 INFO VAD filter removed 00:02.864 of audio
 2025-10-13 17:00:45,196 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
 2025-10-13 17:01:02,619 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 17:39:56,376 INFO Use pytorch device_name: cuda:0
+2025-10-13 17:39:56,376 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 17:40:20,388 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-10-13 17:41:05,132 INFO Use pytorch device_name: cuda:0
+2025-10-13 17:41:05,132 INFO Load pretrained SentenceTransformer: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+2025-10-13 17:41:23,428 INFO HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"

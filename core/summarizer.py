@@ -3,6 +3,8 @@ from html import escape
 from collections import Counter
 import re
 import datetime
+from typing import List, Optional
+from .audio import Segment
 
 # ✅ 액션아이템 트리거 키워드(간단 버전) - 없어서 경고났던 부분 보완
 ACTION_VERBS = [
@@ -388,6 +390,7 @@ def actions_from_segments(segments):
     UI 표를 위해 owner/due 등을 갖춘 dict 리스트를 함께 쓰기 위해 새로 추가.
     """
     items = []
+    acts = []
     seen = set()
     for s in segments:
         if any(v in s.text for v in ACTION_VERBS):
@@ -455,42 +458,42 @@ def llm_summarize(
 (주목할 만한 내용이나 추가 논의가 필요한 사항, 없으면 생략)
 
 요약은 간결하고 명확하게 작성해주세요."""
+    return None
+    # try:
+    #     router = LLMRouter(default_backend=backend or "openai:gpt-4o-mini")
+    #     summary = router.complete(backend, prompt, temperature=0.3)
+    #     return summary
+    # except Exception as e:
+    #     return f"⚠️ LLM 요약 생성 실패: {str(e)}\n\n기본 요약으로 대체합니다.\n\n{simple_summarize(segments, max_len=15)}"
+    #     text = getattr(s, "text", "").strip()
+    #     if not text:
+    #         continue
+    #     if any(v in text for v in ACTION_VERBS):
+    #         owner = s.speaker_name if s.speaker_name != "Unknown" else "speaker_00"
+    #         # 날짜 파싱
+    #         if dateparser:
+    #             try:
+    #                 deadline = dateparser.parse(text, languages=["ko"])
+    #             except Exception:
+    #                 deadline = None
+    #             due = deadline.strftime("%Y-%m-%d %H:%M") if deadline else _parse_due_fallback_ko(text)
+    #         else:
+    #             due = _parse_due_fallback_ko(text)
 
-    try:
-        router = LLMRouter(default_backend=backend or "openai:gpt-4o-mini")
-        summary = router.complete(backend, prompt, temperature=0.3)
-        return summary
-    except Exception as e:
-        return f"⚠️ LLM 요약 생성 실패: {str(e)}\n\n기본 요약으로 대체합니다.\n\n{simple_summarize(segments, max_len=15)}"
-        text = getattr(s, "text", "").strip()
-        if not text:
-            continue
-        if any(v in text for v in ACTION_VERBS):
-            owner = s.speaker_name if s.speaker_name != "Unknown" else "speaker_00"
-            # 날짜 파싱
-            if dateparser:
-                try:
-                    deadline = dateparser.parse(text, languages=["ko"])
-                except Exception:
-                    deadline = None
-                due = deadline.strftime("%Y-%m-%d %H:%M") if deadline else _parse_due_fallback_ko(text)
-            else:
-                due = _parse_due_fallback_ko(text)
-
-            title = text
-            key = (owner, title, due)
-            if key in seen:
-                continue
-            seen.add(key)
-            items.append({
-                "title": title,
-                "owner": owner,
-                "due": due,
-                "priority": "M",
-                "status": "todo",
-                "notes": ""
-            })
-    return items
+    #         title = text
+    #         key = (owner, title, due)
+    #         if key in seen:
+    #             continue
+    #         seen.add(key)
+    #         items.append({
+    #             "title": title,
+    #             "owner": owner,
+    #             "due": due,
+    #             "priority": "M",
+    #             "status": "todo",
+    #             "notes": ""
+    #         })
+    # return items
 
 def render_actions_table_html(items):
     headers = ["Title","Owner","Due","Priority","Status","Notes"]
