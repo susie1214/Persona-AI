@@ -2,6 +2,7 @@
 import os, sys, traceback, faulthandler, logging
 from PySide6.QtWidgets import QApplication
 from ui.meeting_console import MeetingConsole
+from PySide6.QtGui import QIcon
 
 # .env 파일 로드
 try:
@@ -9,7 +10,7 @@ try:
     load_dotenv()
     print(f"[INFO] .env 파일 로드 완료")
     if os.getenv("HF_TOKEN"):
-        print(f"[INFO] HF_TOKEN 설정됨: {os.getenv('HF_TOKEN')[:10]}...")
+        print(f"[INFO] HF_TOKEN 설정됨: {os.getenv('HF_TOKEN', "None")[:10]}...")
     else:
         print(f"[WARNING] HF_TOKEN이 .env에 없거나 비어있습니다.")
 except ImportError:
@@ -27,9 +28,12 @@ if os.getenv("FORCE_CPU", "0") == "1":
 
 # 크래시 원인 파악 로그
 os.makedirs("output/logs", exist_ok=True)
+
 LOGFILE = "output/logs/app.log"
+
 logging.basicConfig(filename=LOGFILE, level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
+
 faulthandler.enable(open("output/logs/faulthandler.log", "w"))
 
 def excepthook(etype, value, tb):
@@ -48,8 +52,11 @@ sys.excepthook = excepthook
 
 def main():
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("./data/PersonaJK.png"))
+    
     win = MeetingConsole()
     win.show()
+    
     try:
         sys.exit(app.exec())
     except Exception:

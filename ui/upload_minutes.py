@@ -10,21 +10,22 @@ import os, webbrowser, datetime
 from ui.meeting_settings import MeetingSettingsWidget
 from typing import Optional
 
-class UploadMinutesWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        # ... (기존 위젯 구성)
-        # 헤더 영역에 설정 버튼 추가
-        top = QHBoxLayout()
-        top.addStretch(1)
-        self.btn_settings = QPushButton("⚙ 회의록 설정")
-        top.addWidget(self.btn_settings)
-        self.layout().insertLayout(1, top)  # 타이틀 다음 줄에 배치
+# class UploadMinutesWidget(QWidget):
+#     def __init__(self):
+#         super().__init__()
+#         # ... (기존 위젯 구성)
+#         # 헤더 영역에 설정 버튼 추가
+#         top = QHBoxLayout()
+#         top.addStretch(1)
+#         self.btn_settings = QPushButton("⚙ 회의록 설정")
+#         top.addWidget(self.btn_settings)
+#         self.layout().insertLayout(1, top)  # 타이틀 다음 줄에 배치
 
-        self.settings_widget = MeetingSettingsWidget()
-        self._settings_cache = self.settings_widget.get_settings()
+#         self.settings_widget = MeetingSettingsWidget()
+#         self._settings_cache = self.settings_widget.get_settings()
 
-        self.btn_settings.clicked.connect(self._open_settings)
+#         self.btn_settings.clicked.connect(self._open_settings)
+        
 class _Worker(QObject):
     sig_done = Signal(dict)
     sig_error = Signal(str)

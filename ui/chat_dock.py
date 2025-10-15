@@ -110,13 +110,6 @@
 #         self.view.append(f"{backend}: {ans}\n")
 
 
-
-
-
-
-
-
-
 # # # -*- coding: utf-8 -*-
 # # # ui/chat_dock.py
 # # from PySide6.QtWidgets import (
@@ -287,8 +280,9 @@ class ChatDock(QWidget):
     - 중앙: 메시지 리스트(QListWidget, 아이콘 포함)
     - 하단: 입력창 + Send (Enter로도 전송)
     """
-    def __init__(self, parent=None):
+    def __init__(self, rag_store=None, parent=None):
         super().__init__(parent)
+        self.rag_store = rag_store
         self.store = PersonaStore()
         self.router = LLMRouter()
         self.active_persona = None
@@ -360,7 +354,7 @@ class ChatDock(QWidget):
 
     def _append_status(self, text: str):
         it = QListWidgetItem(text)
-        it.setFlags(it.flags() & ~Qt.ItemIsSelectable)
+        it.setFlags(it.flags()) #  & ~Qt.ItemFlag.ItemIsSelectable
         self.view.addItem(it)
         self.view.scrollToBottom()
 
@@ -411,18 +405,43 @@ class ChatDock(QWidget):
             return
         self.edit.clear()
 
+        print(f"[DEBUG] User Query: {q}") # 사용자 쿼리 출력
+
         # 사용자 메시지 렌더
         self._append_message("user", q)
+
+        # RAG 컨텍스트 검색
+        context_block = ""
+        if self.rag_store and self.rag_store.ok:
+            ctx = self.rag_store.search(q, topk=3)
+            
+            print(f"[DEBUG - chat_dock] searched context : {ctx}")
+            if ctx:
+                context_lines = ["[관련 회의 내용]", "-" * 20]
+                for c in ctx:
+                    context_lines.append(f"- {c.get('text', '')}")
+                context_block = "\n".join(context_lines)
+        
+        print(f"[DEBUG] RAG Context:\n{context_block}") # RAG 컨텍스트 출력
 
         # 백엔드 호출
         sys_prompt = self._system_prompt
         backend_label = self.cmb_backend.currentText()
         backend_key = self._current_backend_key()
-        prompt = f"[SYSTEM]\n{sys_prompt}\n\n[USER]\n{q}"
+        
+        # 프롬프트에 컨텍스트 추가
+        prompt = f"[SYSTEM]\n{sys_prompt}\n\n"
+        if context_block:
+            prompt += f"[CONTEXT]\n{context_block}\n\n"
+        prompt += f"[USER]\n{q}"
+
         try:
             ans = self.router.complete(backend_label, prompt, temperature=0.3)
         except Exception as e:
             ans = f"(오류: {e})"
 
         # 모델 응답 렌더(아이콘은 backend_key 기준)
-        self._append_message("assistant", ans, backend_key=backend_key)
+        final_ans = ans
+        if context_block:
+            final_ans += f"\n\n---\n{context_block}"
+        self._append_message("assistant", final_ans, backend_key=backend_key)

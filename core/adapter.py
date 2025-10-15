@@ -244,7 +244,7 @@ class AdapterManager:
     def respond_with_context(
         self,
         query: str,
-        rag_context: list = None,
+        rag_context: list,
         speaker_id: Optional[str] = None,
     ) -> str:
         """

@@ -192,7 +192,7 @@ class MeetingSettingsWidget(QWidget):
         # 참석자
         root.addWidget(QLabel("👥 참석자 (쉼표로 구분)"))
         self.attendees = QLineEdit()
-        self.attendees.setPlaceholderText("예: talysa.geist, tj.kim, 조진경")
+        self.attendees.setPlaceholderText("예: 신○택, 조○경")
         root.addWidget(self.attendees)
 
         # 추가 컨텍스트

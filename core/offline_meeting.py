@@ -150,42 +150,48 @@ def _extract_actions(segments: List[Dict]) -> List[str]:
 
 def _md_from_segments(title: str, segs: List[Dict], use_llm_summary: bool = False, llm_backend: Optional[str] = None) -> Dict[str, str]:
     """세그먼트에서 마크다운 문서 생성"""
+
+    md_lines = []
+    md_lines.append(f"# {title}")
+    md_lines.append("")
+    # md_lines.append(f"- 생성일: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    md_lines.append(f"- 총 발언 수: {len(segs)}")
+    # md_lines.append(f"- 요약 방식: {'AI 요약 (LLM)' if use_llm_summary else '기본 요약'}")
+    md_lines.append("")
+    
+    summary = f"# {title}\n\n"
+    
     # LLM 요약 또는 간단한 요약 사용
     if use_llm_summary:
         print("[INFO] Generating LLM-based summary...")
         # Dict를 Segment 객체로 변환
         from core.summarizer import llm_summarize
         segment_objects = [_dict_to_segment(s) for s in segs]
-        summary = llm_summarize(segment_objects, backend=llm_backend)
+        summary += llm_summarize(segment_objects, backend=llm_backend)
     else:
-        summary = _simple_summarize(segs, max_len=14)
+        summary += _simple_summarize(segs, max_len=14)
 
     actions = _extract_actions(segs)
 
-    md_lines = []
-    md_lines.append(f"# {title}")
-    md_lines.append("")
-    md_lines.append(f"- 생성일: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    md_lines.append(f"- 총 발언 수: {len(segs)}")
-    md_lines.append(f"- 요약 방식: {'AI 요약 (LLM)' if use_llm_summary else '기본 요약'}")
-    md_lines.append("")
+    # md_lines.append("## 요약")
+    # md_lines.append("")
+    
+    # print(f"[DEBUG - offline_meeting-_md_from_segments] summary : {summary}")
+    
+    # if use_llm_summary:
+    #     # LLM 요약은 이미 마크다운 형식으로 되어 있음
+    #     md_lines.append(summary)
+    # else:
+    #     # 기본 요약은 코드 블록으로 감싸기
+    #     md_lines.append("```")
+    #     md_lines.append(summary)
+    #     md_lines.append("```")
+    # md_lines.append("")
 
-    md_lines.append("## 요약")
-    md_lines.append("")
-    if use_llm_summary:
-        # LLM 요약은 이미 마크다운 형식으로 되어 있음
-        md_lines.append(summary)
-    else:
-        # 기본 요약은 코드 블록으로 감싸기
-        md_lines.append("```")
-        md_lines.append(summary)
-        md_lines.append("```")
-    md_lines.append("")
-
-    if actions:
-        md_lines.append("## Action Items (자동 추출)")
-        md_lines.extend(actions)
-        md_lines.append("")
+    # if actions:
+    #     md_lines.append("## Action Items (자동 추출)")
+    #     md_lines.extend(actions)
+    #     md_lines.append("")
 
     md_lines.append("## 전체 대화 로그")
     for s in segs:
@@ -364,8 +370,10 @@ def process_audio_file(
     title = os.path.splitext(os.path.basename(path))[0] or "회의록"
     md_bundle = _md_from_segments(title, merged, use_llm_summary=use_llm_summary, llm_backend=llm_backend)
 
+    # print(f"[DEBUG - offline_meeting - process_audio_file] md_bundle : {md_bundle.get("summary", "")}")
+
     # 5) JSON 저장
-    ts = int(time.time())
+    # ts = int(time.time())
     json_obj = {
         "title": title,
         "source_path": os.path.abspath(path),
@@ -379,7 +387,8 @@ def process_audio_file(
         "use_llm_summary": use_llm_summary,
         "llm_backend": llm_backend if use_llm_summary else None,
     }
-    json_path = os.path.join("output", "meetings", f"meeting_{ts}.json")
+    
+    json_path = os.path.join("output", "meetings", f"{title}.json")
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_obj, f, ensure_ascii=False, indent=2)
@@ -389,7 +398,8 @@ def process_audio_file(
     # UI에서 사용하기 편하도록 반환
     return {
         "title": title,
-        "markdown": md_bundle["markdown"],
+        "markdown": md_bundle.get("markdown", ""),
+        "summary": md_bundle.get("summary", ""),
         "json_path": json_path,
         "segments": merged,
     }

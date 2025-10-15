@@ -2,6 +2,7 @@
 import numpy as np
 from typing import List, Dict, Optional
 from datetime import datetime
+import torch
 
 try:
     from .audio import Segment
@@ -44,14 +45,15 @@ class RagStore:
             self.ok = False
 
         self.collection = "meeting_ctx"
-        self.embed_dim = 384
+        self.embed_dim = 2048
         self.model = None
 
         if self.ok:
             try:
                 self.model = SentenceTransformer(
-                    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-                )
+                    "dragonkue/BGE-m3-ko",
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                ) # "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
                 self.embed_dim = self.model.get_sentence_embedding_dimension()
 
                 # 컬렉션 생성 (이미 존재하면 재사용)

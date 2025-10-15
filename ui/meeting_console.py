@@ -37,11 +37,11 @@ from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
 from core.diarization import DiarizationWorker
 # ✅ 요약/액션/HTML/안건 추출 유틸 불러오기
 from core.summarizer import (
-    # simple_summarize, extract_actions,  # 기존 참조 유지
     render_summary_html_from_segments,
     actions_from_segments,
     render_actions_table_html,
     extract_agenda,
+    llm_summarize,
 )
 from core.rag_store import RagStore
 from core.adapter import AdapterManager
@@ -71,7 +71,7 @@ class ParticipantDialog(QDialog):
         self.edit_name = QLineEdit()
         self.edit_name.setPlaceholderText("참가자 이름 입력 (예: 신현택)")
         layout.addWidget(self.edit_name)
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         layout.addWidget(self.buttons)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -94,7 +94,7 @@ class EnrollSpeakerDialog(QDialog):
         self.edit_name.setPlaceholderText("화자 이름 입력")
         layout.addRow("이름:", self.edit_name)
 
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         layout.addWidget(self.buttons)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
@@ -130,7 +130,6 @@ class MeetingConsole(QMainWindow):
         self.diar_worker.sig_diar_done.connect(self.on_diar_done)
         self.diar_worker.sig_new_speaker.connect(self.on_new_speaker)
 
-        self.rag = RagStore()
         self.adapter = AdapterManager()
         self.unnamed_speakers = {}
 
@@ -143,7 +142,6 @@ class MeetingConsole(QMainWindow):
         self.setCentralWidget(self.tabs)
         self._build_live_tab()
         
-
         # 회의록 탭 (업로드 → 요약/회의록 저장/복사)
         # self.meeting_notes = MeetingNotesView(self)
         # self.tabs.addTab(self.meeting_notes, "Minutes")
@@ -151,12 +149,20 @@ class MeetingConsole(QMainWindow):
         self._build_action_tab()
         self._build_settings_tab()
         self._apply_theme()
+        
+        # RAG Store 초기화 (영구 저장소 경로 지정)
+        os.makedirs("data/qdrant_db", exist_ok=True)
+        self.rag = RagStore(persist_path="data/qdrant_db")
+        if self.rag.ok:
+            self.on_status("✓ RAG Store 초기화 완료 (data/qdrant_db)")
+        else:
+            self.on_status("⚠ RAG Store 사용 불가 - qdrant-client 또는 sentence-transformers 미설치")
 
         # 우측 개인 챗봇 도크
         self.chat_dock = QDockWidget("Persona Chatbot", self)
-        self.chat_panel = ChatDock()
+        self.chat_panel = ChatDock(rag_store = self.rag)
         self.chat_dock.setWidget(self.chat_panel)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.chat_dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chat_dock)
 
         # live 미리보기 타이머
         self.timer = QTimer(self)
@@ -166,33 +172,14 @@ class MeetingConsole(QMainWindow):
         # 설문 마법사(최초 1회)
         # self.survey = PersonaSurveyWizard(parent=self)
         # self.survey.show()
+        
 
     # ---------------- UI builders ----------------
     def _build_minutes_tab(self):
         """Minutes 탭: 회의 전체요약 + Action Items를 이 탭에서 표시"""
-        root = QWidget()
-        L = QVBoxLayout(root)
-
-        # 기존 회의록 뷰(있으면 상단에 배치)
-        try:
-            self.meeting_notes = MeetingNotesView(self)
-            L.addWidget(self.meeting_notes)
-        except Exception:
-            pass
-
-        # 요약 영역
-        L.addWidget(QLabel("회의 전체요약"))
-        self.txt_summary = QTextEdit()
-        self.txt_summary.setReadOnly(True)        # 필요 시 읽기전용
-        L.addWidget(self.txt_summary)
-
-        # 액션 아이템 영역
-        L.addWidget(QLabel("Action Items"))
-        self.txt_actions = QTextEdit()
-        self.txt_actions.setReadOnly(True)
-        L.addWidget(self.txt_actions)
-
-        self.tabs.addTab(root, "Minutes")
+        # 통합된 회의록 뷰 사용
+        self.meeting_notes = MeetingNotesView(self)
+        self.tabs.addTab(self.meeting_notes, "Minutes")
 
     def _build_live_tab(self):
         self.live_root = QWidget()
@@ -219,7 +206,7 @@ class MeetingConsole(QMainWindow):
         L.addLayout(mid)
 
         # split
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         left = QWidget()
         Lv = QVBoxLayout(left)
         self.list_chat = QListWidget()
@@ -568,7 +555,7 @@ class MeetingConsole(QMainWindow):
         F = QFormLayout(system_group)
 
         self.cmb_asr = QComboBox()
-        for m in ["base", "small", "medium", "large-v3"]:
+        for m in ["small", "medium", "large-v3"]: # "base", 
             self.cmb_asr.addItem(m)
         self.cmb_asr.setCurrentText(DEFAULT_MODEL)
 
@@ -583,12 +570,14 @@ class MeetingConsole(QMainWindow):
         # .env 파일에서 로드된 토큰이 있으면 표시
         existing_token = os.getenv(HF_TOKEN_ENV, "")
         if existing_token:
-            self.edit_hf.setText(existing_token)
+            self.edit_hf.setText(f"{existing_token}")
+            self.edit_hf.setEchoMode(QLineEdit.EchoMode.Password)
             self.on_status(f"✓ .env에서 HF_TOKEN 로드됨: {existing_token[:10]}...")
 
         self.btn_add_participant = QPushButton("참가자 추가")
         self.btn_save_speakers = QPushButton("화자 정보 저장")
         self.btn_load_speakers = QPushButton("화자 정보 로드")
+        self.btn_clear_db = QPushButton("Vector DB 초기화")
 
         F.addRow("Whisper Model", self.cmb_asr)
         F.addRow("", self.chk_gpu)
@@ -601,6 +590,11 @@ class MeetingConsole(QMainWindow):
         speaker_buttons.addWidget(self.btn_save_speakers)
         speaker_buttons.addWidget(self.btn_load_speakers)
         F.addRow("화자 관리:", speaker_buttons)
+
+        # DB 관리 버튼
+        db_buttons = QHBoxLayout()
+        db_buttons.addWidget(self.btn_clear_db)
+        F.addRow("DB 관리:", db_buttons)
 
         layout.addWidget(QLabel("🔧 시스템 설정"))
         layout.addWidget(system_group)
@@ -615,7 +609,30 @@ class MeetingConsole(QMainWindow):
         self.btn_add_participant.clicked.connect(self.on_add_participant)
         self.btn_save_speakers.clicked.connect(self.save_speaker_mapping)
         self.btn_load_speakers.clicked.connect(self.load_speaker_mapping)
+        self.btn_clear_db.clicked.connect(self.on_clear_vector_db)
         self.chk_diar2.stateChanged.connect(self.on_diar_toggle_settings)
+
+    def on_clear_vector_db(self):
+        """Vector DB를 초기화"""
+        reply = QMessageBox.question(
+            self,
+            "Vector DB 초기화",
+            "정말로 Vector DB의 모든 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            if self.rag and self.rag.ok:
+                if self.rag.clear_collection():
+                    self.on_status("✓ Vector DB가 성공적으로 초기화되었습니다.")
+                    QMessageBox.information(self, "완료", "Vector DB가 초기화되었습니다.")
+                else:
+                    self.on_status("⚠ Vector DB 초기화에 실패했습니다.")
+                    QMessageBox.warning(self, "오류", "Vector DB 초기화 중 오류가 발생했습니다.")
+            else:
+                self.on_status("⚠ RAG Store가 초기화되지 않아 DB를 초기화할 수 없습니다.")
+                QMessageBox.warning(self, "오류", "RAG Store가 유효하지 않습니다.")
 
     def _apply_theme(self):
         self.setStyleSheet(
@@ -667,7 +684,7 @@ class MeetingConsole(QMainWindow):
 
         # 녹음 자동 시작
         os.makedirs("output/recordings", exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.datetime.now().strftime("%Y년%m월%d일_%H시%M분")
         recording_path = f"output/recordings/meeting_{timestamp}.wav"
 
         self.audio_worker.start_recording(recording_path)
@@ -675,7 +692,7 @@ class MeetingConsole(QMainWindow):
         self.recording_start_time = time.time()
 
         # UI 업데이트
-        self.lbl_record_status.setText(f"🔴 녹음 중: {recording_path}")
+        self.lbl_record_status.setText(f"🔴 녹음 중: {recording_path.split("/")[-1]}")
         self.lbl_record_status.setStyleSheet("color: red; font-weight: bold;")
 
         self.on_status(f"Started. 녹음 시작: {recording_path}")
@@ -716,36 +733,126 @@ class MeetingConsole(QMainWindow):
             self.on_status("Stopped.")
 
     def on_summarize(self):
-        # 1) HTML 요약 (디자인 업그레이드, 기능 동일)
-        html = render_summary_html_from_segments(
-            self.state.live_segments,
-            max_len=12,
-            meeting_title="회의 전체요약",
-            date_str=datetime.datetime.now().strftime("%Y-%m-%d"),
-            participants=sorted(set(
-                seg.speaker_name if seg.speaker_name != "Unknown" else "speaker_00"
-                for seg in self.state.live_segments
-                if getattr(seg, "text", "").strip()
-            ))
-        )
-        self.state.summary = html  # state에도 저장
-        self.txt_summary.setHtml(html)  # ✅ setText → setHtml
+        # 1) LLM을 이용한 AI 요약 생성
+        summary_text = llm_summarize(self.state.live_segments)
+        
+        print(f"[DEBUG - meeting_console] summary_text : {summary_text}")
+        
+        self.state.summary = summary_text  # state에 텍스트 요약 저장
 
-        # 2) Action Items → 표(HTML)
+        # 2) Action Items 추출
         items = actions_from_segments(self.state.live_segments)
-        self.state.actions = items  # 문자열 리스트 대신 dict 리스트 저장(내부 용도)
+        self.state.actions = items
         actions_html = render_actions_table_html(items)
-        self.txt_actions.setHtml(actions_html)  # ✅ setText → setHtml
 
-        QMessageBox.information(self, "Done", "요약/액션아이템 생성 완료")
+        # 3) Transcript 텍스트 생성
+        transcript_lines = []
+        for seg in self.state.live_segments:
+            transcript_lines.append(f"[{seg.speaker_name}] {seg.text}")
+        transcript_text = "\n".join(transcript_lines)
+
+        # 4) 표시용 HTML 생성 (요약 + 액션 아이템)
+        # QTextEdit은 기본적인 마크다운(줄바꿈)을 지원하므로 pre 태그로 감싸기
+        summary_html = f"<pre>{summary_text}</pre>"
+        html_for_display = summary_html + actions_html
+
+        # 5) meeting_notes 뷰에 업데이트
+        self.meeting_notes.update_notes(html_for_display, transcript_text)
+
+        # 6) 🎯 AI 요약문을 RAG에 저장
+        self._save_summary_to_rag(summary_text, items)
+
+        QMessageBox.information(self, "Done", "AI 요약 및 액션 아이템 생성 완료\n요약 문서가 RAG에 저장되었습니다.")
+
+    def _save_summary_to_rag(self, summary_text: str, action_items: list):
+        """
+        요약 문서를 RAG에 저장 (원본 대화는 저장하지 않음)
+
+        Args:
+            summary_text: 텍스트 형식의 요약 문서
+            action_items: 액션 아이템 리스트
+        """
+        if not self.rag.ok:
+            self.on_status("⚠ RAG Store 사용 불가 - 요약 문서 저장 생략")
+            QMessageBox.warning(self, "RAG 저장 실패", 
+                              "RAG Store가 초기화되지 않았습니다.\n" 
+                              "콘솔 로그에서 Qdrant 또는 SentenceTransformer 관련 오류를 확인하세요.")
+            return
+
+        # 회의 메타데이터
+        meeting_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        participants = sorted(set(
+            seg.speaker_name if seg.speaker_name != "Unknown" else "speaker_00"
+            for seg in self.state.live_segments
+            if getattr(seg, "text", "").strip()
+        ))
+
+        # 요약 문서를 하나의 세그먼트로 저장
+        summary_segment = {
+            "speaker_id": "SYSTEM",
+            "speaker_name": "회의 요약",
+            "text": f"[{meeting_date}] 회의 요약 - 참석자: {', '.join(participants)}\n\n{summary_text}",
+            "start": 0.0,
+            "end": 0.0,
+        }
+
+        # 각 액션 아이템을 개별 세그먼트로 저장
+        action_segments = []
+        for item in action_items:
+            action_text = f"[액션아이템] {item.get('title', '')} (담당: {item.get('owner', '')}, 기한: {item.get('due', '')})"
+            action_segments.append({
+                "speaker_id": item.get('owner', 'SYSTEM'),
+                "speaker_name": item.get('owner', '미지정'),
+                "text": action_text,
+                "start": 0.0,
+                "end": 0.0,
+            })
+
+        # RAG 저장 전 내용 출력
+        print("-" * 50)
+        print("[DEBUG] Documents being sent to RAG store:")
+        print("--- 1. Summary Document ---")
+        print(summary_segment['text'])
+        print("--- 2. Action Item Documents ---")
+        for i, act_seg in enumerate(action_segments, 1):
+            print(f"{i}. {act_seg['text']}")
+        print("-" * 50)
+
+        # RAG에 저장
+        try:
+            self.rag.upsert_segments([summary_segment] + action_segments)
+            self.on_status(f"✓ 요약 문서 RAG 저장 완료: 요약 1개 + 액션아이템 {len(action_segments)}개")
+        except Exception as e:
+            self.on_status(f"⚠ 요약 문서 RAG 저장 실패: {e}")
 
     def on_index_to_rag(self):
+        """
+        ⚠️ 주의: 이 기능은 개발/테스트 용도입니다.
+        실제 운영에서는 요약 생성 시 자동으로 RAG에 저장됩니다.
+        원본 대화는 QLoRA 학습에 사용되며 RAG에 저장되지 않습니다.
+        """
         if not self.rag.ok:
             QMessageBox.warning(self, "RAG", "Qdrant 사용 불가(미설치/연결 실패).")
             return
-        # 최근 50줄만 인덱싱 (데모)
+
+        # 경고 메시지
+        reply = QMessageBox.question(
+            self,
+            "RAG 인덱싱",
+            "⚠️ 이 기능은 테스트 용도입니다.\n\n"
+            "실제 운영에서는:\n"
+            "• 요약 문서만 RAG에 저장됩니다 (Summarize 버튼 클릭 시 자동)\n"
+            "• 원본 대화는 QLoRA 학습 데이터로 사용됩니다\n\n"
+            "테스트를 위해 최근 대화를 RAG에 저장하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        # 최근 50줄만 인덱싱 (테스트용)
         self.rag.upsert_segments(self.state.live_segments[-50:])
-        QMessageBox.information(self, "RAG", "최근 발언을 RAG 인덱싱했습니다.")
+        QMessageBox.information(self, "RAG", "테스트용으로 최근 발언을 RAG에 저장했습니다.")
 
     def on_diar_toggle(self):
         self.state.diarization_enabled = self.chk_diar.isChecked()
@@ -898,6 +1005,128 @@ class MeetingConsole(QMainWindow):
 
     def on_adapter_changed(self, name):
         self.adapter.set_active(None if name == "None" else name)
+
+    def on_load_audio_file(self):
+        """오디오 파일을 불러와서 전사 및 요약 표시"""
+        from PySide6.QtWidgets import QFileDialog, QProgressDialog
+        from PySide6.QtCore import QThread, QObject, Signal
+
+        # 파일 선택
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "오디오 파일 선택",
+            "",
+            "Audio/Video Files (*.wav *.mp3 *.m4a *.mp4 *.aac *.flac);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        # 프로그레스 다이얼로그
+        progress = QProgressDialog("파일 처리 중...", "취소", 0, 0, self)
+        progress.setWindowTitle("오디오 파일 처리")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.show()
+
+        # Worker 스레드로 처리
+        from core.offline_meeting import process_audio_file
+
+        class FileProcessWorker(QObject):
+            finished = Signal(dict)
+            error = Signal(str)
+
+            def __init__(self, path):
+                super().__init__()
+                self.path = path
+
+            def run(self):
+                try:
+                    result = process_audio_file(
+                        self.path,
+                        asr_model="medium",
+                        use_gpu=True,
+                        diarize=True,
+                        use_llm_summary=True
+                    )
+                    self.finished.emit(result)
+                except Exception as e:
+                    self.error.emit(str(e))
+
+        thread = QThread()
+        worker = FileProcessWorker(file_path)
+        worker.moveToThread(thread)
+
+        def on_finished(result):
+            progress.close()
+            self._display_file_result(result)
+            thread.quit()
+            thread.deleteLater()
+
+        def on_error(msg):
+            progress.close()
+            QMessageBox.critical(self, "오류", f"파일 처리 중 오류 발생:\n{msg}")
+            thread.quit()
+            thread.deleteLater()
+
+        thread.started.connect(worker.run)
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        thread.start()
+
+    def _display_file_result(self, result: dict):
+        """
+        파일 처리 결과를 UI에 표시
+
+        Args:
+            result: process_audio_file()의 반환값
+                - segments: 전사 세그먼트 리스트
+                - markdown: 마크다운 회의록
+                - summary: AI 요약 텍스트
+                - actions: 액션 아이템 리스트
+        """
+        segments = result.get("segments", [])
+        transcript_text = result.get("markdown", "")
+        summary_text = result.get("summary", "") # AI 요약
+
+        # 1. Segment 객체로 변환하여 state에 저장 (QLoRA 학습용)
+        from core.audio import Segment
+        self.state.live_segments = []
+        for seg in segments:
+            self.state.live_segments.append(Segment(
+                start=seg.get("start", 0.0),
+                end=seg.get("end", 0.0),
+                text=seg.get("text", ""),
+                speaker_id=seg.get("speaker", "Unknown"),
+                speaker_name=seg.get("speaker", "Unknown")
+            ))
+
+        # 2. 액션 아이템 추출 및 HTML 생성
+        action_items = actions_from_segments(self.state.live_segments)
+        actions_html = render_actions_table_html(action_items) if action_items else "<p>액션 없음</p>"
+
+        # 3. 표시용 HTML 생성 (요약 + 액션 아이템)
+        summary_html = f"<pre>{summary_text}</pre>"
+        html_for_display = summary_html + actions_html
+
+        # 4. meeting_notes 뷰에 업데이트
+        self.meeting_notes.update_notes(html_for_display, transcript_text)
+
+        # 5. AI 요약 문서를 RAG에 저장
+        self._save_summary_to_rag(summary_text, action_items)
+
+        # 상태 메시지
+        self.on_status(f"✓ 파일 처리 완료: {len(segments)}개 세그먼트, {len(action_items)}개 액션아이템")
+
+        # Minutes 탭으로 전환
+        self.tabs.setCurrentWidget(self.meeting_notes)
+
+        QMessageBox.information(
+            self,
+            "파일 처리 완료",
+            f"전사 완료: {len(segments)}개 발언\n"
+            f"액션 아이템: {len(action_items) if action_items else 0}개\n\n"
+            f"AI 요약 및 전사 내용이 RAG에 저장되었습니다."
+        )
 
     # ---------------- Signals ----------------
     def on_status(self, msg: str):

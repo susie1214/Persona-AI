@@ -11,7 +11,8 @@ try:
     import pyaudio
     AUDIO_BACKEND = "pyaudio"
 except Exception:
-    pyaudio = None
+    # pyaudio = None
+    pass
 
 # Fallback to sounddevice for macOS/Linux
 if AUDIO_BACKEND is None:
@@ -19,7 +20,9 @@ if AUDIO_BACKEND is None:
         import sounddevice as sd
         AUDIO_BACKEND = "sounddevice"
     except Exception:
-        sd = None
+        # sd = None
+        # need logging for error at sound device
+        pass 
 
 try:
     from faster_whisper import WhisperModel
@@ -589,13 +592,13 @@ class AudioWorker(QObject):
         try:
             if AUDIO_BACKEND == "pyaudio":
                 if self.stream:
-                    self.stream.stop_stream()
+                    # self.stream.stop_stream()
                     self.stream.close()
                 if self.audio:
                     self.audio.terminate()
             else:
                 if self.stream:
-                    self.stream.stop()
+                    # self.stream.stop()
                     self.stream.close()
         except Exception:
             pass
