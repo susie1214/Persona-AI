@@ -69,9 +69,8 @@ class SpeakerMappingWidget(QWidget):
 
     def load_speakers(self):
         """화자 목록 로드 및 테이블 업데이트"""
-        # 파일에서 최신 데이터 다시 로드
-        self.speaker_manager.load_speakers()
-        self.speaker_manager.load_speaker_mapping()
+        # VoiceStore(DB)에서 최신 화자 정보를 강제로 다시 로드하여 메모리 캐시를 갱신
+        self.speaker_manager.reload()
 
         speakers = self.speaker_manager.get_all_speakers()
         print(f"[DEBUG] on setting loading speakers : {speakers}")
@@ -108,13 +107,15 @@ class SpeakerMappingWidget(QWidget):
 
         if self.speaker_manager.update_speaker_name(speaker_id, new_name):
             QMessageBox.information(self, "성공", f"화자 '{speaker_id}'의 이름이 '{new_name}'으로 변경되었습니다.")
-            self.mapping_changed.emit(self.speaker_manager.speaker_mapping)
+            # 화자 매핑 딕셔너리 생성 {speaker_id: display_name}
+            mapping = {s.speaker_id: s.display_name for s in self.speaker_manager.speakers.values()}
+            self.mapping_changed.emit(mapping)
         else:
             QMessageBox.warning(self, "오류", f"화자 '{speaker_id}' 업데이트에 실패했습니다.")
 
     def get_speaker_mapping(self) -> dict:
         """현재 화자 매핑 반환"""
-        return self.speaker_manager.speaker_mapping
+        return {s.speaker_id: s.display_name for s in self.speaker_manager.speakers.values()}
 
     def reset_speakers(self):
         """모든 화자 정보 초기화"""

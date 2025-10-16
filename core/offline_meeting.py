@@ -10,6 +10,7 @@ import os
 import json
 import time
 import datetime
+import numpy as np
 from typing import List, Dict, Optional
 from core.audio import Segment
 
@@ -209,11 +210,20 @@ def _md_from_segments(title: str, segs: List[Dict], use_llm_summary: bool = Fals
     }
 
 
-def _match_speakers_by_overlap(whisper_segments: List[Dict], diar_annotation) -> List[Dict]:
+def _match_speakers_by_overlap(
+    whisper_segments: List[Dict],
+    diar_annotation,
+    pipeline=None,
+    speaker_manager=None,
+    audio_path: Optional[str] = None
+) -> List[Dict]:
     """
     Whisper segments와 Diarization 결과를 매칭
     whisper_segments: List[Dict] with keys: text, start, end
     diar_annotation: pyannote Annotation
+    pipeline: pyannote Pipeline (임베딩 추출용)
+    speaker_manager: SpeakerManager 인스턴스
+    audio_path: 오디오 파일 경로 (임베딩 추출용)
     return: List[Dict] with keys: speaker, text, start, end
     """
     out = []
@@ -227,6 +237,16 @@ def _match_speakers_by_overlap(whisper_segments: List[Dict], diar_annotation) ->
             print(f"[WARNING] Failed to extract diarization turns: {e}")
             diar_turns = []
 
+    # 임베딩 추출 (가능한 경우)
+    embeddings = None
+    if pipeline and audio_path and speaker_manager and speaker_manager.voice_store.ok:
+        try:
+            if hasattr(pipeline, 'embedding_model'):
+                embeddings = pipeline.embedding_model(audio_path)
+                print("[INFO] Successfully extracted embeddings for speaker identification")
+        except Exception as e:
+            print(f"[WARNING] Failed to extract embeddings: {e}")
+
     for seg in whisper_segments:
         w_start = seg["start"]
         w_end = seg["end"]
@@ -236,7 +256,8 @@ def _match_speakers_by_overlap(whisper_segments: List[Dict], diar_annotation) ->
 
         # 가장 많이 겹치는 화자 찾기
         best_overlap = 0.0
-        best_spk = None
+        best_turn = None
+        best_pyannote_spk = None
 
         for turn, _, spk in diar_turns:
             s = float(turn.start)
@@ -244,10 +265,27 @@ def _match_speakers_by_overlap(whisper_segments: List[Dict], diar_annotation) ->
             overlap = max(0.0, min(w_end, e) - max(w_start, s))
             if overlap > best_overlap:
                 best_overlap = overlap
-                best_spk = spk
+                best_turn = turn
+                best_pyannote_spk = spk
 
-        if best_spk:
-            speaker = str(best_spk)
+        # 임베딩 기반 화자 식별 시도
+        if best_turn and embeddings is not None and speaker_manager:
+            try:
+                # 해당 시간 구간의 임베딩 추출
+                segment_embedding = embeddings.crop(best_turn)
+                segment_embedding = np.mean(segment_embedding, axis=0)
+
+                # SpeakerManager로 화자 식별
+                speaker_id, confidence = speaker_manager.identify_speaker(segment_embedding, threshold=0.72)
+                speaker = speaker_id
+                print(f"[INFO] Identified speaker: {speaker_id} (confidence: {confidence:.3f})")
+
+            except Exception as e:
+                print(f"[WARNING] Speaker identification failed, using pyannote label: {e}")
+                speaker = str(best_pyannote_spk) if best_pyannote_spk else "Unknown"
+        elif best_pyannote_spk:
+            # 임베딩을 사용할 수 없는 경우 pyannote 기본 레이블 사용
+            speaker = str(best_pyannote_spk)
 
         out.append({
             "speaker": speaker,
@@ -269,6 +307,7 @@ def process_audio_file(
     use_llm_summary: bool = False,
     llm_backend: Optional[str] = None,
     settings: Optional[Dict] = None,
+    speaker_manager=None,
 ) -> Dict:
     """
     오디오 파일 경로를 받아 STT(+옵션: 화자분리) 수행 후
@@ -334,6 +373,7 @@ def process_audio_file(
 
     # 2) Diarization (optional)
     diar_annotation = None
+    pipeline = None
     if diarize and PyannotePipeline is not None:
         hf_token = os.getenv("HF_TOKEN", "").strip()
         if hf_token:
@@ -348,13 +388,21 @@ def process_audio_file(
             except Exception as e:
                 print(f"[WARNING] Diarization failed: {e}")
                 diar_annotation = None
+                pipeline = None
         else:
             print("[WARNING] HF_TOKEN not set, skipping diarization")
 
     # 3) 화자 매칭
     if diar_annotation is not None:
         print("[INFO] Matching speakers...")
-        merged = _match_speakers_by_overlap(whisper_segments, diar_annotation)
+        # SpeakerManager가 제공되면 임베딩 기반 화자 식별 사용
+        merged = _match_speakers_by_overlap(
+            whisper_segments,
+            diar_annotation,
+            pipeline=pipeline,
+            speaker_manager=speaker_manager,
+            audio_path=path
+        )
     else:
         print("[INFO] No diarization, marking all as Unknown")
         merged = []

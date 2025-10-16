@@ -13,17 +13,18 @@ from core.offline_meeting import process_audio_file
 from core.summarizer import actions_from_segments
 
 class _SummWorker(QObject):
-    
+
     sig_done = Signal(dict)
     sig_error = Signal(str)
-    
-    def __init__(self, path, settings, use_llm_summary=True, llm_backend=None):
+
+    def __init__(self, path, settings, use_llm_summary=True, llm_backend=None, speaker_manager=None):
         super().__init__()
         self.path = path
         self.settings = settings or {}
         self.use_llm_summary = use_llm_summary
         self.llm_backend = llm_backend
-    
+        self.speaker_manager = speaker_manager
+
     def run(self):
         try:
             # mp3/wav/mp4/m4a 등 ffmpeg로 처리됨
@@ -34,7 +35,8 @@ class _SummWorker(QObject):
                 diarize=True,
                 use_llm_summary=self.use_llm_summary,
                 llm_backend=self.llm_backend,
-                settings=self.settings
+                settings=self.settings,
+                speaker_manager=self.speaker_manager
             )
             
             # print(f"[DEBUG - meeting_notes] res : {res}")
@@ -99,7 +101,7 @@ class MeetingNotesView(QWidget):
         self.txt_summary.setReadOnly(False)
         L.addWidget(self.txt_summary, 1)
 
-        L.addWidget(QLabel("회요 전체 전사"))
+        L.addWidget(QLabel("회의 전체 전사"))
         self.txt_transcript = QTextEdit()
         self.txt_transcript.setReadOnly(True) # 전사는 읽기 전용
         L.addWidget(self.txt_transcript, 1)
@@ -146,13 +148,29 @@ class MeetingNotesView(QWidget):
             "Audio/Video (*.wav *.mp3 *.m4a *.flac *.mp4 *.mkv *.aac);;All Files (*)"
         )
         if not path: return
+        self.edit_title.clear()
         self.progress.setVisible(True)
         self.progress.setRange(0,0)
         self.txt_summary.clear()
         self.txt_transcript.clear()
 
+        # LLM 요약 옵션 가져오기
+        use_llm = self.chk_llm_summary.isChecked()
+        llm_backend = self.combo_llm_backend.currentText() if use_llm else None
+
+        # speaker_manager 가져오기 (main_console에서)
+        speaker_manager = None
+        if self.main_console and hasattr(self.main_console, 'speaker_manager'):
+            speaker_manager = self.main_console.speaker_manager
+
         self.thread = QThread(self)
-        self.worker = _SummWorker(path, self._settings_cache)
+        self.worker = _SummWorker(
+            path,
+            self._settings_cache,
+            use_llm_summary=use_llm,
+            llm_backend=llm_backend,
+            speaker_manager=speaker_manager
+        )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.sig_done.connect(self.on_done)
@@ -176,14 +194,20 @@ class MeetingNotesView(QWidget):
         self._last_txt = transcript.replace("#", "").replace("**", "").replace("`", "")
 
         if not self.edit_title.text().strip():
-            self.edit_title.setText(title + " - " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
-        
+            self.edit_title.setText(title + " 회의록")
+
         # RAG 저장을 위해 main_console의 메서드 호출
         if self.main_console and hasattr(self.main_console, '_save_summary_to_rag'):
             action_items = actions_from_segments(segments)
             self.main_console._save_summary_to_rag(summary, action_items)
             # 사용자에게 RAG 저장 사실 알림 (옵션)
             self.main_console.on_status("✓ 파일 요약본이 RAG에 저장되었습니다.")
+
+        # 화자 매핑 탭 새로고침 (파일 처리 중 새로운 화자가 식별되었을 수 있음)
+        if self.main_console and hasattr(self.main_console, 'meeting_settings'):
+            if hasattr(self.main_console.meeting_settings, 'speaker_tab'):
+                self.main_console.meeting_settings.speaker_tab.load_speakers()
+                self.main_console.on_status("✓ 화자 매핑 정보가 업데이트되었습니다.")
 
         QMessageBox.information(self, "완료", "회의록을 생성했습니다.")
 
