@@ -339,6 +339,39 @@ def process_audio_file(
     if not os.path.exists(path):
         raise FileNotFoundError(f"입력 파일이 존재하지 않습니다: {path}")
 
+    # m4a 파일 처리: 임시 wav로 변환 (ffmpeg 호환성 문제 방지)
+    original_path = path
+    temp_wav_path = None
+    file_ext = os.path.splitext(path)[1].lower()
+
+    if file_ext == ".m4a":
+        print(f"[INFO] Detected .m4a file, converting to temporary WAV for better compatibility...")
+        temp_wav_path = path.replace(".m4a", "_temp.wav")
+        try:
+            import subprocess
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-i", path,
+                    "-ar", "16000",  # 16kHz sampling rate (Whisper 최적)
+                    "-ac", "1",       # mono
+                    "-y",             # overwrite
+                    temp_wav_path
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode == 0:
+                print(f"[INFO] Converted to: {temp_wav_path}")
+                path = temp_wav_path
+            else:
+                print(f"[WARNING] FFmpeg conversion failed: {result.stderr}")
+                print(f"[INFO] Attempting to process original .m4a file directly...")
+        except FileNotFoundError:
+            print("[WARNING] FFmpeg not found in PATH. Attempting to process .m4a directly...")
+        except Exception as e:
+            print(f"[WARNING] Conversion error: {e}. Processing original file...")
+
     # 디바이스 설정
     device = _whisper_device(use_gpu)
     compute = "int8" if device == "cpu" else "float16"
@@ -356,11 +389,17 @@ def process_audio_file(
         model = WhisperModel(asr_model, device="cpu", compute_type="int8")
 
     print("[INFO] Transcribing audio...")
-    segments_generator, info = model.transcribe(
-        path,
-        vad_filter=True,
-        language="ko"
-    )
+    try:
+        segments_generator, info = model.transcribe(
+            path,
+            vad_filter=True,
+            language="ko"
+        )
+    except Exception as e:
+        # 임시 파일 정리
+        if temp_wav_path and os.path.exists(temp_wav_path):
+            os.remove(temp_wav_path)
+        raise RuntimeError(f"음성 인식 실패: {str(e)}")
 
     # Generator를 list로 변환하면서 안전하게 데이터 추출
     whisper_segments = []
@@ -415,16 +454,18 @@ def process_audio_file(
             })
 
     # 4) 마크다운 생성
-    title = os.path.splitext(os.path.basename(path))[0] or "회의록"
+    # 원본 파일명 사용 (temp.wav가 아닌 원본 .m4a 파일명)
+    title = os.path.splitext(os.path.basename(original_path))[0] or "회의록"
+    # _temp 제거
+    if title.endswith("_temp"):
+        title = title[:-5]
+
     md_bundle = _md_from_segments(title, merged, use_llm_summary=use_llm_summary, llm_backend=llm_backend)
 
-    # print(f"[DEBUG - offline_meeting - process_audio_file] md_bundle : {md_bundle.get("summary", "")}")
-
     # 5) JSON 저장
-    # ts = int(time.time())
     json_obj = {
         "title": title,
-        "source_path": os.path.abspath(path),
+        "source_path": os.path.abspath(original_path),
         "created_at": datetime.datetime.now().isoformat(),
         "segments": merged,
         "summary": md_bundle.get("summary", ""),
@@ -435,13 +476,21 @@ def process_audio_file(
         "use_llm_summary": use_llm_summary,
         "llm_backend": llm_backend if use_llm_summary else None,
     }
-    
+
     json_path = os.path.join("output", "meetings", f"{title}.json")
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_obj, f, ensure_ascii=False, indent=2)
 
     print(f"[INFO] Saved to: {json_path}")
+
+    # 임시 WAV 파일 정리
+    if temp_wav_path and os.path.exists(temp_wav_path):
+        try:
+            os.remove(temp_wav_path)
+            print(f"[INFO] Cleaned up temporary file: {temp_wav_path}")
+        except Exception as e:
+            print(f"[WARNING] Failed to remove temporary file: {e}")
 
     # UI에서 사용하기 편하도록 반환
     return {

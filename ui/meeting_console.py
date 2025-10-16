@@ -425,14 +425,34 @@ class MeetingConsole(QMainWindow):
         # Minutes 탭 업데이트
         self.meeting_notes.update_notes(html_for_display, transcript_text)
 
-        self._save_summary_to_rag(summary_text, items)
+        # RAG에 요약과 실시간 세그먼트 저장
+        self._save_summary_to_rag(summary_text, items, self.state.live_segments)
         QMessageBox.information(self, "Done", "AI 요약 및 액션 아이템 생성 완료\n요약 문서가 RAG에 저장되었습니다.")
 
-    def _save_summary_to_rag(self, summary_text: str, action_items: list):
+    def _save_summary_to_rag(self, summary_text: str, action_items: list, segments=None):
+        """요약과 세그먼트를 RAG에 저장"""
         if not self.rag.ok:
             return
-        # Logic to save summary to RAG
-        pass
+
+        count = 0
+
+        # 1. 세그먼트 저장 (실제 발언 내용)
+        if segments:
+            count = self.rag.upsert_segments(segments)
+            print(f"[INFO] Saved {count} segments to RAG")
+
+        # 2. 요약 텍스트도 하나의 특별한 세그먼트로 저장 (검색 가능하도록)
+        if summary_text and summary_text.strip():
+            from core.audio import Segment
+
+            summary_segment = Segment(
+                text=f"[회의 요약]\n{summary_text}",
+                start=0.0,
+                end=0.0,
+                speaker_name="SUMMARY"
+            )
+            self.rag.upsert_segments([summary_segment])
+            print("[INFO] Saved summary to RAG")
 
     def on_index_to_rag(self):
         if not self.rag.ok:

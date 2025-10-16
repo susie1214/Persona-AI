@@ -16,35 +16,88 @@ class _SummWorker(QObject):
 
     sig_done = Signal(dict)
     sig_error = Signal(str)
+    sig_progress = Signal(int, int, str)  # (current, total, filename)
 
-    def __init__(self, path, settings, use_llm_summary=True, llm_backend=None, speaker_manager=None):
+    def __init__(self, paths, settings, use_llm_summary=True, llm_backend=None, speaker_manager=None):
         super().__init__()
-        self.path = path
+        self.paths = paths if isinstance(paths, list) else [paths]
         self.settings = settings or {}
         self.use_llm_summary = use_llm_summary
         self.llm_backend = llm_backend
         self.speaker_manager = speaker_manager
 
     def run(self):
-        try:
-            # mp3/wav/mp4/m4a 등 ffmpeg로 처리됨
-            res = process_audio_file(
-                self.path,
-                asr_model="medium",
-                use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
-                diarize=True,
-                use_llm_summary=self.use_llm_summary,
-                llm_backend=self.llm_backend,
-                settings=self.settings,
-                speaker_manager=self.speaker_manager
-            )
-            
-            # print(f"[DEBUG - meeting_notes] res : {res}")
-            
-            self.sig_done.emit(res)
-            
-        except Exception as e:
-            self.sig_error.emit(str(e))
+        total = len(self.paths)
+        all_results = []
+
+        for idx, path in enumerate(self.paths, 1):
+            try:
+                # 진행 상황 알림
+                import os
+                filename = os.path.basename(path)
+                self.sig_progress.emit(idx, total, filename)
+
+                # mp3/wav/mp4/m4a 등 ffmpeg로 처리됨
+                res = process_audio_file(
+                    path,
+                    asr_model="medium",
+                    use_gpu=(os.getenv("FORCE_CPU","0")!="1"),
+                    diarize=True,
+                    use_llm_summary=self.use_llm_summary,
+                    llm_backend=self.llm_backend,
+                    settings=self.settings,
+                    speaker_manager=self.speaker_manager
+                )
+
+                all_results.append(res)
+
+            except Exception as e:
+                self.sig_error.emit(f"파일 '{filename}' 처리 실패: {str(e)}")
+                return
+
+        # 모든 파일 처리 완료 후 결과 전달
+        if len(all_results) == 1:
+            # 단일 파일인 경우 기존과 동일하게 처리
+            self.sig_done.emit(all_results[0])
+        else:
+            # 여러 파일인 경우 통합 결과 생성
+            self.sig_done.emit(self._merge_results(all_results))
+
+    def _merge_results(self, results):
+        """여러 파일의 결과를 하나로 통합"""
+        merged_segments = []
+        merged_summaries = []
+        titles = []
+
+        for res in results:
+            title = res.get("title", "")
+            summary = res.get("summary", "")
+            segments = res.get("segments", [])
+
+            titles.append(title)
+            if summary:
+                merged_summaries.append(f"## {title}\n{summary}")
+            merged_segments.extend(segments)
+
+        # 통합 결과
+        return {
+            "title": " + ".join(titles) if titles else "통합 회의록",
+            "summary": "\n\n".join(merged_summaries),
+            "markdown": self._create_merged_markdown(results),
+            "segments": merged_segments,
+            "json_path": results[0].get("json_path", "") if results else ""
+        }
+
+    def _create_merged_markdown(self, results):
+        """여러 파일의 마크다운을 통합"""
+        lines = []
+        for res in results:
+            title = res.get("title", "회의록")
+            markdown = res.get("markdown", "")
+            lines.append(f"# {title}")
+            lines.append(markdown)
+            lines.append("\n---\n")
+        return "\n".join(lines)
 
 class MeetingNotesView(QWidget):
     """업로드 → 요약/회의록 → TXT/MD/HTML 저장 & 클립보드 복사"""
@@ -86,6 +139,12 @@ class MeetingNotesView(QWidget):
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         L.addWidget(self.progress)
+
+        # 진행 상황 텍스트 (파일 처리 정보)
+        self.lbl_progress = QLabel("")
+        self.lbl_progress.setVisible(False)
+        self.lbl_progress.setStyleSheet("color: #666; font-size: 11px;")
+        L.addWidget(self.lbl_progress)
 
         # 제목 입력/수정
         ti = QHBoxLayout()
@@ -143,14 +202,19 @@ class MeetingNotesView(QWidget):
 
     # ---- actions ----
     def on_upload(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "회의 자료 파일 선택", "",
+        # 여러 파일 선택 가능
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "회의 자료 파일 선택 (다중 선택 가능)", "",
             "Audio/Video (*.wav *.mp3 *.m4a *.flac *.mp4 *.mkv *.aac);;All Files (*)"
         )
-        if not path: return
+        if not paths:
+            return
+
         self.edit_title.clear()
         self.progress.setVisible(True)
-        self.progress.setRange(0,0)
+        self.progress.setRange(0, 0)  # 무한 진행 표시
+        self.lbl_progress.setVisible(True)
+        self.lbl_progress.setText(f"총 {len(paths)}개 파일 처리 준비 중...")
         self.txt_summary.clear()
         self.txt_transcript.clear()
 
@@ -165,7 +229,7 @@ class MeetingNotesView(QWidget):
 
         self.thread = QThread(self)
         self.worker = _SummWorker(
-            path,
+            paths,  # 여러 파일 전달
             self._settings_cache,
             use_llm_summary=use_llm,
             llm_backend=llm_backend,
@@ -175,13 +239,22 @@ class MeetingNotesView(QWidget):
         self.thread.started.connect(self.worker.run)
         self.worker.sig_done.connect(self.on_done)
         self.worker.sig_error.connect(self.on_err)
+        self.worker.sig_progress.connect(self.on_progress)  # 진행 상황 업데이트
         self.worker.sig_done.connect(self.thread.quit)
         self.worker.sig_error.connect(self.thread.quit)
         self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
 
+    def on_progress(self, current: int, total: int, filename: str):
+        """파일 처리 진행 상황 업데이트"""
+        self.lbl_progress.setText(f"처리 중: [{current}/{total}] {filename}")
+        if self.main_console and hasattr(self.main_console, 'on_status'):
+            self.main_console.on_status(f"파일 처리 중: [{current}/{total}] {filename}")
+
     def on_done(self, result: dict):
         self.progress.setVisible(False)
+        self.lbl_progress.setVisible(False)
+
         summary = result.get("summary", "")
         transcript = result.get("markdown", "")
         title = result.get("title", "회의록")
@@ -199,9 +272,10 @@ class MeetingNotesView(QWidget):
         # RAG 저장을 위해 main_console의 메서드 호출
         if self.main_console and hasattr(self.main_console, '_save_summary_to_rag'):
             action_items = actions_from_segments(segments)
-            self.main_console._save_summary_to_rag(summary, action_items)
+            # segments도 함께 전달하여 RAG에 저장
+            self.main_console._save_summary_to_rag(summary, action_items, segments)
             # 사용자에게 RAG 저장 사실 알림 (옵션)
-            self.main_console.on_status("✓ 파일 요약본이 RAG에 저장되었습니다.")
+            self.main_console.on_status(f"✓ 파일 요약본과 {len(segments)}개 세그먼트가 RAG에 저장되었습니다.")
 
         # 화자 매핑 탭 새로고침 (파일 처리 중 새로운 화자가 식별되었을 수 있음)
         if self.main_console and hasattr(self.main_console, 'meeting_settings'):
@@ -213,6 +287,7 @@ class MeetingNotesView(QWidget):
 
     def on_err(self, msg: str):
         self.progress.setVisible(False)
+        self.lbl_progress.setVisible(False)
         QMessageBox.critical(self, "오류", msg)
 
     def copy_to_clip(self):
