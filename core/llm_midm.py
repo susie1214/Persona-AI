@@ -1,4 +1,8 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+# core/llm_midm.py
+import os
+
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
 import torch
 import os
 
@@ -23,9 +27,12 @@ class MidmLLM():
         )
 
     def complete(self, prompt, temperature=0.7, max_length=512):
+        
         print(f"[DEBUG] device : {self.model.device}")
+        
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
         inputs.pop("token_type_ids")
+        
         outputs = self.model.generate(
             **inputs,
             do_sample=True,

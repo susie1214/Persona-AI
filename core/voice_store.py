@@ -3,6 +3,7 @@
 import numpy as np
 import uuid
 from typing import List, Dict, Optional, Tuple
+from datetime import datetime
 
 try:
     from qdrant_client import QdrantClient, models
@@ -87,7 +88,7 @@ class VoiceStore:
         payload = {
             "speaker_id": speaker_id,
             "display_name": display_name,
-            "updated_at": models.Datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat()
         }
 
         try:

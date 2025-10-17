@@ -13,7 +13,7 @@ from ui.survey_wizard import PersonaSurveyWizard
 from ui.chat_dock import ChatDock
 from ui.meeting_notes import MeetingNotesView
 from ui.meeting_settings import MeetingSettingsWidget
-
+from ui.documents_tab_qt6 import DocumentsTab
 from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
 from core.diarization import DiarizationWorker
 from core.summarizer import (
@@ -24,6 +24,8 @@ from core.rag_store import RagStore
 from core.adapter import AdapterManager
 from core.speaker import SpeakerManager
 import numpy as np
+from core.schedule_store import Schedule as JSONSchedule, save_schedule as json_save, list_month as json_list_month, new_id as json_new_id
+
 
 THEME = {
     "bg": "#e6f5e6", "pane": "#99cc99", "light_bg": "#fafffa",
@@ -54,9 +56,13 @@ class MeetingConsole(QMainWindow):
         self._build_live_tab()
         self._build_minutes_tab()
         self._build_schedule_tab()
+        self.documents_tab = DocumentsTab(self)
+        self.tabs.addTab(self.documents_tab, "Documents")
         self._build_settings_tab()
         self._apply_theme()
         self._connect_signals()
+
+
 
         os.makedirs("data/qdrant_db", exist_ok=True)
         self.rag = RagStore(persist_path="data/qdrant_db")
@@ -70,6 +76,113 @@ class MeetingConsole(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh_preview)
         self.timer.start(1000)
+
+        self._calendar_cache = {}  # {day: [items]}  로딩 캐시
+        self._reload_calendar()    # 현재 연/월 일정 로드 및 표시
+
+    def _current_schedule_payload(self) -> dict:
+        # ISO 문자열로 변환
+        s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm").replace(" ", "T") + ":00"
+        e = self.dt_end.dateTime().toString("yyyy-MM-dd HH:mm").replace(" ", "T") + ":00"
+        pj_s = self.d_project_start.date().toString("yyyy-MM-dd") or None
+        pj_d = self.d_project_due.date().toString("yyyy-MM-dd") or None
+        pay  = self.d_payment_due.date().toString("yyyy-MM-dd") or None
+        todos = [self.list_todo.item(i).text() for i in range(self.list_todo.count())]
+
+        return {
+            "title": self.edit_title.text().strip(),
+            "location": self.edit_location.text().strip() or None,
+            "meeting_start": s,
+            "meeting_end": e,
+            "project_start": pj_s,
+            "project_due": pj_d,
+            "settlement_at": pay,
+            "todos": todos,
+        }
+
+    def _save_schedule_json(self):
+        data = self._current_schedule_payload()
+        # 업서트 키: (title + meeting_start)
+        # 새로 저장할 때마다 새로운 id 생성 (업서트 내부에서 기존건 갱신됨)
+        row = JSONSchedule(
+            id=json_new_id(),
+            **data
+        )
+        json_save(row)  # ← 파일 schedules.json에 원자적으로 저장
+        # 저장 후 현재 달 다시 로드
+        self._reload_calendar()
+
+    def _reload_calendar(self):
+        try:
+            y = int(self.cmb_year.currentText())
+            m = int(self.cmb_month.currentText())
+        except Exception:
+            # 초기 진입 시 combobox가 아직 준비 안 되었을 수도 있음
+            d = self.dt_start.date()
+            y, m = d.year(), d.month()
+        self._calendar_cache = json_list_month(y, m)  # {day : [items]}
+        # 날짜별 툴팁 표시(디자인 안 바꾸고 가볍게 정보만)
+        from PySide6.QtGui import QTextCharFormat
+        fmt_default = QTextCharFormat()
+        self.calendar.setDateTextFormat(self.calendar.selectedDate(), fmt_default)  # 리셋용
+
+        # 간단 툴팁: 같은 달의 각 날짜 셀에 일정 요약
+        for day, items in self._calendar_cache.items():
+            date_obj = self.calendar.selectedDate()
+            qdate = date_obj  # 임시
+            qdate.setDate(int(self.cmb_year.currentText()), int(self.cmb_month.currentText()), day)
+            tips = []
+            for it in items:
+                t = it.get("title", "-")
+                st = it.get("meeting_start", "")[11:16]  # HH:MM
+                tips.append(f"{st} {t}")
+            self.calendar.setDateTextFormat(qdate, QTextCharFormat())  # 형식은 유지
+            self.calendar.setToolTip("\n".join(tips) if tips else "")
+
+
+    def _compose_schedule_doc(self) -> str:
+        """현재 폼 값을 기반으로 RAG에 넣을 문서 문자열을 만든다."""
+        s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm")
+        e = self.dt_end.dateTime().toString("yyyy-MM-dd HH:mm")
+        title = self.edit_title.text().strip() or "(제목 미정)"
+        loc = self.edit_location.text().strip() or "-"
+        pj_s = self.d_project_start.date().toString("yyyy-MM-dd")
+        pj_d = self.d_project_due.date().toString("yyyy-MM-dd")
+        pay  = self.d_payment_due.date().toString("yyyy-MM-dd")
+
+        todos = [self.list_todo.item(i).text() for i in range(self.list_todo.count())]
+        todo_block = "\n".join([f"- {t}" for t in todos]) if todos else "- (없음)"
+
+        # 🔎 검색에 잘 잡히도록 키워드/태그 형식 포함
+        # type:schedule, title:, when:, where:, project: 등 명시
+        doc = (
+            "[SCHEDULE DOC]\n"
+            f"type: schedule\n"
+            f"title: {title}\n"
+            f"when: {s} ~ {e}\n"
+            f"where: {loc}\n"
+            f"project_start: {pj_s}\n"
+            f"project_due: {pj_d}\n"
+            f"settlement_due: {pay}\n"
+            f"todos:\n{todo_block}\n"
+        )
+        return doc
+    
+    def _save_schedule_to_rag(self):
+        """현재 스케줄을 RAG에 Segment로 저장(업서트)"""
+        if not (self.rag and self.rag.ok):
+            return
+        from core.audio import Segment
+
+        text = self._compose_schedule_doc()
+        seg = Segment(
+            text=text,
+            start=0.0,                    # 시간 축 사용 안 함
+            end=0.0,
+            speaker_name="SCHEDULE"       # 검색 시 필터링에 유용
+        )
+        # 기존 요약 저장과 동일한 방식으로 업서트
+        self.rag.upsert_segments([seg])
 
     def _connect_signals(self):
         self.audio_worker.sig_transcript.connect(self.on_segment)
@@ -618,6 +731,10 @@ class MeetingConsole(QMainWindow):
         self.state.schedule_note = memo
         self.txt_sched.setPlainText(memo)
         QMessageBox.information(self, "메모 생성", "스케줄 메모를 갱신했습니다.")
+
+        self._save_schedule_json()  # (이미 넣으셨다면 그대로 유지)
+        self._save_schedule_to_rag()  # ← 이 줄 추가
+
 
     def _refresh_preview(self):
         if not self.state.live_segments:

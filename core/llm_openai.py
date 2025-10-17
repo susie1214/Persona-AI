@@ -1,8 +1,10 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
+
 
 class OpenAILLM():
     def __init__(self, model="gpt-4o-mini"):

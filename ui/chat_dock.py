@@ -229,7 +229,7 @@
 # ui/chat_dock.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
-    QHBoxLayout, QComboBox, QListWidget, QListWidgetItem
+    QHBoxLayout, QComboBox, QListWidget, QListWidgetItem, QListView
 )
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import QSize, Qt
@@ -328,6 +328,8 @@ class ChatDock(QWidget):
         self.view = QListWidget()
         self.view.setIconSize(QSize(40, 40))
         self.view.setUniformItemSizes(False)
+        self.view.setResizeMode(QListView.Adjust)
+        self.view.setWordWrap(True)
         layout.addWidget(self.view, 1)
 
         # 초기 상태 안내
@@ -376,8 +378,8 @@ class ChatDock(QWidget):
         text_block = f"{label}\n{text}"
         it = QListWidgetItem(icon, text_block)
         # 대충 높이 가늠(본문 길이에 따라 늘려줌)
-        approx_lines = max(1, len(text) // 38 + 1)
-        it.setSizeHint(QSize(0, 26 + approx_lines * 18))
+        # approx_lines = max(1, len(text) // 38 + 1)
+        # it.setSizeHint(QSize(0, 26 + approx_lines * 18))
         self.view.addItem(it)
         self.view.scrollToBottom()
 
