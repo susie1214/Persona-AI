@@ -1,11 +1,10 @@
 import os
 from openai import OpenAI
-from .llm_base import LLM
 from dotenv import load_dotenv
 
 load_dotenv()
 
-class OpenAILLM(LLM):
+class OpenAILLM():
     def __init__(self, model="gpt-4o-mini"):
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
