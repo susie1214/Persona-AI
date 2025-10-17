@@ -1,10 +1,7 @@
 # core/llm_midm.py
 import os
-
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
 import torch
-import os
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 class MidmLLM():
     def __init__(self, model="K-intelligence/Midm-2.0-Mini-Instruct"):

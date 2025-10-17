@@ -224,8 +224,6 @@
 # #         self.view.append(f"👤 {self.active_persona or 'User'}: {q}")
 # #         self.view.append(f"🤖 {backend}: {ans}\n")
 
-
-# -*- coding: utf-8 -*-
 # ui/chat_dock.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
@@ -240,11 +238,11 @@ from core.persona_store import PersonaStore
 
 # 백엔드 이름 → 디스플레이명/아이콘 경로 매핑 (요청 경로 사용)
 AVATAR_PATHS = {
-    "user": ("You", "data/user.png"),
-    "openai:gpt-4o-mini": ("ChatGPT", "data/chatgpt.png"),
-    "llama3": ("Llama 3", "data/llama.png"),
-    "A_X-4.0": ("A.(에이닷)", "data/aidot.png"),
-    "Midm-2.0-Mini-Instruct": ("믿:음K 2.0", "data/mideumk.png"),
+    "user": ("You", "resources/user.png"),
+    "openai:gpt-4o-mini": ("ChatGPT", "resources/chatgpt.png"),
+    "llama3": ("Llama 3", "resources/llama.png"),
+    "A_X-4.0": ("A.(에이닷)", "resources/aidot.png"),
+    "Midm-2.0-Mini-Instruct": ("믿:음K 2.0", "resources/mideumk.png"),
 }
 
 def _icon_from(path: str) -> QIcon:
@@ -328,7 +326,7 @@ class ChatDock(QWidget):
         self.view = QListWidget()
         self.view.setIconSize(QSize(40, 40))
         self.view.setUniformItemSizes(False)
-        self.view.setResizeMode(QListView.Adjust)
+        self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setWordWrap(True)
         layout.addWidget(self.view, 1)
 
