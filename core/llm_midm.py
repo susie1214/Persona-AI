@@ -19,16 +19,17 @@ class MidmLLM():
         self.model = AutoModelForCausalLM.from_pretrained(
             local_model_path,
             local_files_only=True,
-            dtype=torch.float16,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto"
         )
 
     def complete(self, prompt, temperature=0.7, max_length=512):
-        
-        print(f"[DEBUG] device : {self.model.device}")
-        
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        inputs.pop("token_type_ids")
+        # 모델의 실제 device 자동 감지 (device_map="auto" 사용 시 필수)
+        device = next(self.model.parameters()).device
+        print(f"[DEBUG] Midm model running on device: {device}")
+
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+        inputs.pop("token_type_ids", None)  # None 추가로 키가 없어도 오류 방지
         
         outputs = self.model.generate(
             **inputs,

@@ -13,7 +13,7 @@ from ui.survey_wizard import PersonaSurveyWizard
 from ui.chat_dock import ChatDock
 from ui.meeting_notes import MeetingNotesView
 from ui.meeting_settings import MeetingSettingsWidget
-from ui.documents_tab_qt6 import DocumentsTab
+from ui.documents_tab import DocumentsTab
 from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
 from core.diarization import DiarizationWorker
 from core.summarizer import (

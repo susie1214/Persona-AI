@@ -1,23 +1,58 @@
-__pycache__
-*/__pycache__
+# Python
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 
-# 
-deprecated
-samples
+# Deprecated & Test files
+deprecated/
+samples/
+test_*.py
+example_*.py
+run_gui.py
 
-data
-output
-outputs/*
+# Data & Models
+data/
+output/
+outputs/
 qdrant_db/
-models/
 qdrant_storage/
+models/
+adapters/
+audio_in/
 
 # 가상환경
-venv
+venv/
+env/
+.venv/
 
+# 환경변수
 .env
+.env.local
 
-.claude
+# IDE
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
+# 프로필 & 매핑
 speaker_mapping.json
 speaker_profiles.pkl
+schedules.json
+
+# 로그
+*.log
+output/logs/
+faulthandler.log
+
+# OS
+.DS_Store
+Thumbs.db

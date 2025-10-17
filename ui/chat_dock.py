@@ -230,10 +230,34 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QComboBox, QListWidget, QListWidgetItem, QListView
 )
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QThread, Signal, QObject
 
 from core.llm_router import LLMRouter
 from core.persona_store import PersonaStore
+
+
+# ========== LLM 비동기 Worker ==========
+class LLMWorker(QObject):
+    """LLM 호출을 백그라운드 스레드에서 처리하는 Worker"""
+    sig_done = Signal(str)  # 성공 시 응답 텍스트
+    sig_error = Signal(str)  # 오류 시 에러 메시지
+
+    def __init__(self, router, backend, prompt, temperature):
+        super().__init__()
+        self.router = router
+        self.backend = backend
+        self.prompt = prompt
+        self.temperature = temperature
+
+    def run(self):
+        """LLM 호출 실행 (별도 스레드에서)"""
+        try:
+            answer = self.router.complete(self.backend, self.prompt, temperature=self.temperature)
+            self.sig_done.emit(answer)
+        except Exception as e:
+            import traceback
+            error_msg = f"LLM 오류: {str(e)}\n{traceback.format_exc()}"
+            self.sig_error.emit(error_msg)
 
 
 # 백엔드 이름 → 디스플레이명/아이콘 경로 매핑 (요청 경로 사용)
@@ -286,6 +310,11 @@ class ChatDock(QWidget):
         self.active_persona = None
         self._system_prompt = "You are a helpful assistant."
         self.setMinimumWidth(360)
+
+        # LLM 비동기 처리용
+        self.llm_thread = None
+        self.llm_worker = None
+        self._current_context = ""  # RAG 컨텍스트 임시 저장
 
         layout = QVBoxLayout(self)
 
@@ -403,9 +432,14 @@ class ChatDock(QWidget):
         q = self.edit.text().strip()
         if not q:
             return
-        self.edit.clear()
 
-        print(f"[DEBUG] User Query: {q}") # 사용자 쿼리 출력
+        # 이미 LLM 처리 중이면 무시
+        if self.llm_thread and self.llm_thread.isRunning():
+            self._append_status("⚠️ 이전 요청 처리 중입니다. 잠시만 기다려주세요...")
+            return
+
+        self.edit.clear()
+        print(f"[DEBUG] User Query: {q}")
 
         # 사용자 메시지 렌더
         self._append_message("user", q)
@@ -414,34 +448,66 @@ class ChatDock(QWidget):
         context_block = ""
         if self.rag_store and self.rag_store.ok:
             ctx = self.rag_store.search(q, topk=3)
-            
             print(f"[DEBUG - chat_dock] searched context : {ctx}")
             if ctx:
                 context_lines = ["[관련 회의 내용]", "-" * 20]
                 for c in ctx:
                     context_lines.append(f"- {c.get('text', '')}")
                 context_block = "\n".join(context_lines)
-        
-        print(f"[DEBUG] RAG Context:\n{context_block}") # RAG 컨텍스트 출력
 
-        # 백엔드 호출
+        print(f"[DEBUG] RAG Context:\n{context_block}")
+        self._current_context = context_block  # 나중에 응답에 추가하기 위해 저장
+
+        # 프롬프트 생성
         sys_prompt = self._system_prompt
         backend_label = self.cmb_backend.currentText()
-        backend_key = self._current_backend_key()
-        
-        # 프롬프트에 컨텍스트 추가
+
         prompt = f"[SYSTEM]\n{sys_prompt}\n\n"
         if context_block:
             prompt += f"[CONTEXT]\n{context_block}\n\n"
         prompt += f"[USER]\n{q}"
 
-        try:
-            ans = self.router.complete(backend_label, prompt, temperature=0.3)
-        except Exception as e:
-            ans = f"(오류: {e})"
+        # "생각 중..." 메시지 표시
+        self._append_status("🤔 답변 생성 중...")
 
-        # 모델 응답 렌더(아이콘은 backend_key 기준)
-        final_ans = ans
-        if context_block:
-            final_ans += f"\n\n---\n{context_block}"
+        # UI 입력 비활성화
+        self.btn.setEnabled(False)
+        self.edit.setEnabled(False)
+
+        # 비동기 LLM 호출
+        self.llm_thread = QThread()
+        self.llm_worker = LLMWorker(self.router, backend_label, prompt, temperature=0.3)
+        self.llm_worker.moveToThread(self.llm_thread)
+
+        # 시그널 연결
+        self.llm_thread.started.connect(self.llm_worker.run)
+        self.llm_worker.sig_done.connect(self._on_llm_done)
+        self.llm_worker.sig_error.connect(self._on_llm_error)
+        self.llm_worker.sig_done.connect(self.llm_thread.quit)
+        self.llm_worker.sig_error.connect(self.llm_thread.quit)
+        self.llm_thread.finished.connect(self._on_llm_finished)
+
+        # 스레드 시작
+        self.llm_thread.start()
+
+    def _on_llm_done(self, answer: str):
+        """LLM 응답 성공"""
+        backend_key = self._current_backend_key()
+
+        # 응답에 컨텍스트 추가
+        final_ans = answer
+        if self._current_context:
+            final_ans += f"\n\n---\n{self._current_context}"
+
         self._append_message("assistant", final_ans, backend_key=backend_key)
+
+    def _on_llm_error(self, error_msg: str):
+        """LLM 오류 처리"""
+        self._append_message("assistant", f"❌ {error_msg}", backend_key=None)
+
+    def _on_llm_finished(self):
+        """LLM 처리 완료 (성공/실패 무관)"""
+        # UI 다시 활성화
+        self.btn.setEnabled(True)
+        self.edit.setEnabled(True)
+        self._current_context = ""  # 컨텍스트 초기화

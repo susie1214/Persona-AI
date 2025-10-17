@@ -26,8 +26,10 @@ class AXLLM():
         )
 
     def complete(self, prompt: str, temperature: float = 0.7, max_new_tokens: int = 512) -> str:
-        print(f"[DEBUG] device : {self.model.device}")
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        # 모델의 실제 device 자동 감지 (device_map="auto" 사용 시 필수)
+        device = next(self.model.parameters()).device
+        print(f"[DEBUG] A.X model running on device: {device}")
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
         outputs = self.model.generate(
             **inputs,
             do_sample=True,
