@@ -203,6 +203,12 @@ class PersonaManagementWidget(QWidget):
             detail_btn.clicked.connect(lambda checked, p=persona: self.show_persona_detail(p))
             action_layout.addWidget(detail_btn)
 
+            # 삭제 버튼
+            delete_btn = QPushButton("삭제")
+            delete_btn.setStyleSheet("QPushButton { color: #DC2626; }")
+            delete_btn.clicked.connect(lambda checked, sid=persona.speaker_id, name=persona.display_name: self.delete_persona(sid, name))
+            action_layout.addWidget(delete_btn)
+
             self.persona_table.setCellWidget(row, 5, action_widget)
 
     def add_persona(self):
@@ -282,6 +288,39 @@ class PersonaManagementWidget(QWidget):
         """페르소나 상세 정보 표시"""
         dialog = PersonaDetailDialog(persona, self)
         dialog.exec()
+
+    def delete_persona(self, speaker_id: str, display_name: str):
+        """페르소나 삭제"""
+        if not self.persona_manager:
+            return
+
+        # 확인 다이얼로그
+        reply = QMessageBox.question(
+            self,
+            "페르소나 삭제",
+            f"'{display_name}' ({speaker_id}) 페르소나를 삭제하시겠습니까?\n\n"
+            f"이 작업은 되돌릴 수 없습니다.\n"
+            f"페르소나 정보만 삭제되며, 화자 음성 데이터와 발언 기록은 유지됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                self.persona_manager.delete_persona(speaker_id)
+                QMessageBox.information(
+                    self,
+                    "삭제 완료",
+                    f"'{display_name}' 페르소나가 삭제되었습니다."
+                )
+                self.load_personas()
+                self.persona_updated.emit(speaker_id)
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "삭제 실패",
+                    f"페르소나 삭제 중 오류가 발생했습니다:\n{str(e)}"
+                )
 
     def _create_new_persona_dialog(self):
         """새 페르소나 생성 다이얼로그"""

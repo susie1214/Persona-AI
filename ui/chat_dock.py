@@ -5,9 +5,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import QSize, Qt, QThread, Signal, QObject
+from typing import Optional
 
 from core.llm_router import LLMRouter
-from core.persona_store import PersonaStore
+from core.digital_persona import DigitalPersonaManager
 
 
 # ========== LLM 비동기 Worker ==========
@@ -72,17 +73,18 @@ def _norm_backend_key(text: str) -> str:
 class ChatDock(QWidget):
     """
     Persona Chatbot 패널
-    - 상단: Persona/Backend 선택(Backend 아이콘 표시)
+    - 상단: Persona 선택 (Backend는 페르소나 설정에서 가져옴)
     - 중앙: 메시지 리스트(QListWidget, 아이콘 포함)
     - 하단: 입력창 + Send (Enter로도 전송)
     """
-    def __init__(self, rag_store=None, parent=None):
+    def __init__(self, rag_store=None, persona_manager: Optional[DigitalPersonaManager] = None, parent=None):
         super().__init__(parent)
         self.rag_store = rag_store
-        self.store = PersonaStore()
+        self.persona_manager = persona_manager
         self.router = LLMRouter()
-        self.active_persona = None
+        self.active_persona_id = None  # 현재 선택된 페르소나 speaker_id
         self._system_prompt = "You are a helpful assistant."
+        self._current_backend = "openai:gpt-4o-mini"  # 기본 백엔드
         self.setMinimumWidth(360)
 
         # LLM 비동기 처리용
@@ -92,36 +94,18 @@ class ChatDock(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # === 상단 Persona / Backend ===
+        # === 상단 Persona 선택 ===
         row = QHBoxLayout()
-        row.addWidget(QLabel("Persona"))
+        row.addWidget(QLabel("대화 상대"))
         self.cmb_persona = QComboBox()
-        self.cmb_persona.addItem("(없음)")
-        for k in self.store.data.keys():
-            if k != "default_style":
-                self.cmb_persona.addItem(k)
+        self.load_personas()
         self.cmb_persona.currentTextChanged.connect(self.on_persona_changed)
         row.addWidget(self.cmb_persona)
 
         row.addWidget(QLabel("Backend"))
-        self.cmb_backend = QComboBox()
-        # 표시 문자열(라벨)을 그대로 넣되, 아이콘은 정규화된 키 기준으로 세팅
-        backends = [
-            "openai:gpt-4o-mini",
-            "ollama:llama3",
-            "ax:A.X-4.0",
-            "midm:Midm-2.0-Mini-Instruct",
-        ]
-        for b in backends:
-            self.cmb_backend.addItem(b)
-        # 아이콘 부착
-        for i in range(self.cmb_backend.count()):
-            label = self.cmb_backend.itemText(i)
-            key = _norm_backend_key(label)
-            disp, icon_path = AVATAR_PATHS.get(key, (label, ""))
-            if icon_path:
-                self.cmb_backend.setItemIcon(i, _icon_from(icon_path))
-        row.addWidget(self.cmb_backend)
+        self.lbl_backend = QLabel("openai:gpt-4o-mini")
+        self.lbl_backend.setStyleSheet("color: #6B7280; font-style: italic;")
+        row.addWidget(self.lbl_backend)
 
         layout.addLayout(row)
 
@@ -134,9 +118,7 @@ class ChatDock(QWidget):
         layout.addWidget(self.view, 1)
 
         # 초기 상태 안내
-        default_be = "openai:gpt-4o-mini"
-        self.cmb_backend.setCurrentText(default_be)
-        self._append_status(f"🧭 Active persona: (없음) | backend: {default_be}")
+        self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
 
         # === 하단: 입력 ===
         sub = QHBoxLayout()
@@ -150,10 +132,30 @@ class ChatDock(QWidget):
         self.btn.clicked.connect(self.on_send)
         self.edit.returnPressed.connect(self.on_send)
 
+    # ---------- 페르소나 관리 ----------
+    def load_personas(self):
+        """페르소나 목록 로드 (드롭다운 갱신)"""
+        self.cmb_persona.clear()
+        self.cmb_persona.addItem("없음 (회사 전체)")
+
+        if self.persona_manager:
+            personas = self.persona_manager.get_all_personas()
+            for persona in personas:
+                display_text = f"{persona.display_name} ({persona.speaker_id})"
+                self.cmb_persona.addItem(display_text, userData=persona.speaker_id)
+
+    def refresh_personas(self):
+        """외부에서 페르소나 갱신 요청 시 호출"""
+        current_text = self.cmb_persona.currentText()
+        self.load_personas()
+        # 기존 선택 유지 시도
+        index = self.cmb_persona.findText(current_text)
+        if index >= 0:
+            self.cmb_persona.setCurrentIndex(index)
+
     # ---------- 내부 유틸 ----------
     def _current_backend_key(self) -> str:
-        label = self.cmb_backend.currentText()
-        return _norm_backend_key(label)
+        return _norm_backend_key(self._current_backend)
 
     def _append_status(self, text: str):
         it = QListWidgetItem(text)
@@ -185,22 +187,36 @@ class ChatDock(QWidget):
         self.view.scrollToBottom()
 
     # ---------- 이벤트 ----------
-    def on_persona_changed(self, name: str):
-        if name == "(없음)":
-            self.active_persona = None
+    def on_persona_changed(self, display_text: str):
+        """페르소나 선택 변경 시"""
+        if display_text.startswith("없음"):
+            # 회사 전체 챗봇
+            self.active_persona_id = None
             self._system_prompt = "You are a helpful assistant."
+            self._current_backend = "openai:gpt-4o-mini"
+            self.lbl_backend.setText(self._current_backend)
+            self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
             return
-        self.set_active_persona(name)
 
-    def set_active_persona(self, name: str | None):
-        """외부에서 자동 페르소나 주입 시 호출"""
-        self.active_persona = name
-        sys = self.store.build_system_prompt(name)
-        self._system_prompt = sys or "You are a helpful assistant."
-        be = self.store.choose_backend(name)
-        if self.cmb_backend.findText(be) >= 0:
-            self.cmb_backend.setCurrentText(be)
-        self._append_status(f"🧭 Active persona: {name or '(없음)'} | backend: {be}")
+        # 페르소나 선택
+        index = self.cmb_persona.currentIndex()
+        speaker_id = self.cmb_persona.itemData(index)
+
+        if not speaker_id or not self.persona_manager:
+            return
+
+        persona = self.persona_manager.get_persona(speaker_id)
+        if not persona:
+            return
+
+        self.active_persona_id = speaker_id
+        self._system_prompt = persona.generate_system_prompt()
+        self._current_backend = persona.llm_backend or "openai:gpt-4o-mini"
+        self.lbl_backend.setText(self._current_backend)
+
+        self._append_status(
+            f"🧭 대화 상대: {persona.display_name} | backend: {self._current_backend}"
+        )
 
     def on_send(self):
         q = self.edit.text().strip()
@@ -234,7 +250,7 @@ class ChatDock(QWidget):
 
         # 프롬프트 생성
         sys_prompt = self._system_prompt
-        backend_label = self.cmb_backend.currentText()
+        backend_label = self._current_backend  # 페르소나 설정에서 가져온 백엔드 사용
 
         prompt = f"[SYSTEM]\n{sys_prompt}\n\n"
         if context_block:

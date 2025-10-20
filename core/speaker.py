@@ -35,8 +35,9 @@ class SpeakerManager:
     - VoiceStore(Qdrant)를 통해 임베딩과 메타데이터를 영구 저장.
     - 메모리 상에 화자 객체(Speaker)를 캐싱하여 빠른 접근 제공.
     """
-    def __init__(self, voice_store: VoiceStore = None):
+    def __init__(self, voice_store: VoiceStore = None, persona_manager=None):
         self.voice_store = voice_store if voice_store else VoiceStore()
+        self.persona_manager = persona_manager  # DigitalPersonaManager 참조
         self.speakers: Dict[str, Speaker] = {}  # speaker_id -> Speaker object (in-memory cache)
         self.next_speaker_id_num = 1
         self._load_from_store()
@@ -140,20 +141,31 @@ class SpeakerManager:
         return speaker_id
 
     def update_speaker_name(self, speaker_id: str, new_name: str) -> bool:
-        """화자의 표시 이름 업데이트"""
+        """화자의 표시 이름 업데이트 (페르소나도 자동 동기화)"""
         if not self.voice_store.ok:
             return False
 
         # 1. DB 업데이트
         success = self.voice_store.update_speaker_name(speaker_id, new_name)
-        
+
         if success:
             # 2. 메모리 캐시 업데이트
             speaker = self.get_speaker_by_id(speaker_id)
             if speaker:
                 speaker.display_name = new_name
+
+            # 3. 페르소나 동기화
+            if self.persona_manager:
+                persona = self.persona_manager.get_persona(speaker_id)
+                if persona:
+                    self.persona_manager.update_persona(
+                        speaker_id,
+                        display_name=new_name
+                    )
+                    print(f"[INFO] Synced persona display_name for {speaker_id}")
+
             print(f"[INFO] Updated speaker name for {speaker_id} to '{new_name}'")
-        
+
         return success
 
     def get_speaker_by_id(self, speaker_id: str) -> Optional[Speaker]:
@@ -168,18 +180,42 @@ class SpeakerManager:
         # 메모리 캐시의 최신 정보를 반환
         return [(s.speaker_id, s.display_name, s.embedding_count) for s in self.speakers.values()]
 
+    def delete_speaker(self, speaker_id: str) -> bool:
+        """특정 화자 삭제 (페르소나도 함께 삭제)"""
+        if not self.voice_store.ok:
+            return False
+
+        # 1. DB에서 삭제
+        success = self.voice_store.delete_speaker(speaker_id)
+
+        if success:
+            # 2. 메모리 캐시에서 제거
+            if speaker_id in self.speakers:
+                del self.speakers[speaker_id]
+
+            # 3. 페르소나도 함께 삭제
+            if self.persona_manager:
+                persona = self.persona_manager.get_persona(speaker_id)
+                if persona:
+                    self.persona_manager.delete_persona(speaker_id)
+                    print(f"[INFO] Deleted persona for {speaker_id}")
+
+            print(f"[INFO] Deleted speaker: {speaker_id}")
+
+        return success
+
     def reset_all_speakers(self) -> bool:
         """모든 화자 정보 초기화"""
         if not self.voice_store.ok:
             return False
-        
+
         # 1. DB 초기화
         self.voice_store.delete_all_speakers()
-        
+
         # 2. 메모리 캐시 초기화
         self.speakers = {}
         self.next_speaker_id_num = 1
-        
+
         print("[INFO] All speakers have been reset.")
         return True
 

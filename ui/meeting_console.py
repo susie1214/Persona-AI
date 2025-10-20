@@ -66,7 +66,7 @@ class MeetingConsole(QMainWindow):
         self.persona_store = PersonaStore()
 
         # Speaker & Persona 관리자 초기화
-        self.speaker_manager = SpeakerManager(voice_store=self.voice_store)
+        self.speaker_manager = SpeakerManager(voice_store=self.voice_store, persona_manager=None)
 
         # DigitalPersonaManager 초기화 (항상 시도)
         self.persona_manager = None
@@ -78,6 +78,8 @@ class MeetingConsole(QMainWindow):
                     persona_store=self.persona_store,
                     storage_path="data/digital_personas"
                 )
+                # SpeakerManager에 PersonaManager 연결 (화자 이름 변경 시 페르소나 자동 동기화)
+                self.speaker_manager.persona_manager = self.persona_manager
                 print("[INFO] DigitalPersonaManager initialized successfully")
             except Exception as e:
                 print(f"[WARN] DigitalPersonaManager initialization failed: {e}")
@@ -111,7 +113,7 @@ class MeetingConsole(QMainWindow):
         self.on_status("✓ RAG Store 초기화 완료" if self.rag.ok else "⚠ RAG Store 사용 불가")
 
         self.chat_dock = QDockWidget("Persona Chatbot", self)
-        self.chat_panel = ChatDock(rag_store=self.rag)
+        self.chat_panel = ChatDock(rag_store=self.rag, persona_manager=self.persona_manager)
         self.chat_dock.setWidget(self.chat_panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chat_dock)
 
@@ -505,6 +507,7 @@ class MeetingConsole(QMainWindow):
             persona_manager=self.persona_manager
         )
         self.meeting_settings.speaker_mapping_changed.connect(self.on_speaker_mapping_changed)
+        self.meeting_settings.persona_updated.connect(self.on_persona_updated)
         layout.addWidget(self.meeting_settings)
 
         self.tabs.addTab(main_widget, "Settings")
@@ -675,6 +678,11 @@ class MeetingConsole(QMainWindow):
         if not mapping:
             self.state.speaker_map = {}
         self.on_status(f"화자 매핑 업데이트: {len(mapping)}개")
+
+    def on_persona_updated(self, speaker_id: str):
+        """페르소나 업데이트 시 ChatDock 드롭다운 갱신"""
+        self.chat_panel.refresh_personas()
+        self.on_status(f"페르소나 업데이트: {speaker_id}")
 
     def _on_year_month_changed(self):
         """연/월 콤보 변경 → 달력 페이지 이동"""

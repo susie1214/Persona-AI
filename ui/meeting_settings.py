@@ -21,7 +21,7 @@ TEMPLATES = [
 ]
 
 GLOSSARY_PRESETS = [
-    ("카카오 용어집", "kakao"),
+    ("PersonaJK 용어집", "kakao"),
     ("인프라 용어집", "infra"),
 ]
 
@@ -43,8 +43,8 @@ class SpeakerMappingWidget(QWidget):
 
         # 테이블
         self.speaker_table = QTableWidget()
-        self.speaker_table.setColumnCount(4)
-        self.speaker_table.setHorizontalHeaderLabels(["화자 ID", "표시 이름", "임베딩 수", "액션"])
+        self.speaker_table.setColumnCount(5)
+        self.speaker_table.setHorizontalHeaderLabels(["화자 ID", "표시 이름", "임베딩 수", "저장", "삭제"])
 
         # 테이블 헤더 설정
         header = self.speaker_table.horizontalHeader()
@@ -52,6 +52,7 @@ class SpeakerMappingWidget(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(self.speaker_table)
 
@@ -98,6 +99,12 @@ class SpeakerMappingWidget(QWidget):
             save_btn.clicked.connect(lambda checked, r=row: self.save_speaker_name(r))
             self.speaker_table.setCellWidget(row, 3, save_btn)
 
+            # 삭제 버튼
+            delete_btn = QPushButton("삭제")
+            delete_btn.setStyleSheet("QPushButton { color: #DC2626; }")
+            delete_btn.clicked.connect(lambda checked, sid=speaker_id, name=display_name: self.delete_speaker(sid, name))
+            self.speaker_table.setCellWidget(row, 4, delete_btn)
+
     def save_speaker_name(self, row):
         """화자 이름 저장"""
         speaker_id = self.speaker_table.item(row, 0).text()
@@ -118,6 +125,43 @@ class SpeakerMappingWidget(QWidget):
     def get_speaker_mapping(self) -> dict:
         """현재 화자 매핑 반환"""
         return {s.speaker_id: s.display_name for s in self.speaker_manager.speakers.values()}
+
+    def delete_speaker(self, speaker_id: str, display_name: str):
+        """개별 화자 삭제"""
+        # 확인 다이얼로그
+        reply = QMessageBox.question(
+            self,
+            "화자 삭제",
+            f"'{display_name}' ({speaker_id}) 화자를 삭제하시겠습니까?\n\n"
+            f"이 작업은 되돌릴 수 없습니다.\n"
+            f"화자 음성 데이터와 관련된 페르소나도 함께 삭제됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                if self.speaker_manager.delete_speaker(speaker_id):
+                    QMessageBox.information(
+                        self,
+                        "삭제 완료",
+                        f"'{display_name}' 화자가 삭제되었습니다."
+                    )
+                    self.load_speakers()
+                    mapping = self.get_speaker_mapping()
+                    self.mapping_changed.emit(mapping)
+                else:
+                    QMessageBox.warning(
+                        self,
+                        "삭제 실패",
+                        f"화자 '{speaker_id}' 삭제 중 오류가 발생했습니다."
+                    )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "삭제 실패",
+                    f"화자 삭제 중 오류가 발생했습니다:\n{str(e)}"
+                )
 
     def reset_speakers(self):
         """모든 화자 정보 초기화"""
@@ -179,22 +223,15 @@ class MeetingSettingsWidget(QWidget):
         self.meeting_tab = self.create_meeting_settings_tab()
         self.tab_widget.addTab(self.meeting_tab, "회의 설정")
 
-        # 화자 매핑 탭 (외부에서 주입받은 speaker_manager 사용)
-        self.speaker_tab = SpeakerMappingWidget(speaker_manager=self._speaker_manager)
-        self.speaker_tab.mapping_changed.connect(self.speaker_mapping_changed.emit)
-        self.tab_widget.addTab(self.speaker_tab, "화자 매핑")
-
-        # 페르소나 관리 탭 (디지털 페르소나 관리)
-        if self._persona_manager:
-            from ui.persona_management import PersonaManagementWidget
-            self.persona_tab = PersonaManagementWidget(
-                persona_manager=self._persona_manager,
-                speaker_manager=self._speaker_manager
-            )
-            self.persona_tab.persona_updated.connect(self.persona_updated.emit)
-            self.tab_widget.addTab(self.persona_tab, "페르소나 관리")
-        else:
-            self.persona_tab = None
+        # 화자 & 페르소나 통합 탭
+        from ui.speaker_persona_widget import SpeakerPersonaWidget
+        self.speaker_persona_tab = SpeakerPersonaWidget(
+            speaker_manager=self._speaker_manager,
+            persona_manager=self._persona_manager
+        )
+        self.speaker_persona_tab.mapping_changed.connect(self.speaker_mapping_changed.emit)
+        self.speaker_persona_tab.persona_updated.connect(self.persona_updated.emit)
+        self.tab_widget.addTab(self.speaker_persona_tab, "화자 & 페르소나")
 
         # 심플 스타일
         self.setStyleSheet("""
@@ -306,14 +343,13 @@ class MeetingSettingsWidget(QWidget):
         self._settings.update(self.get_settings())
 
     def refresh_speaker_mapping(self):
-        """화자 매핑 탭 새로고침"""
-        self.speaker_tab.load_speakers()
+        """화자 & 페르소나 탭 새로고침"""
+        self.speaker_persona_tab.load_data()
 
     def get_speaker_mapping(self) -> dict:
         """현재 화자 매핑 딕셔너리 반환"""
-        return self.speaker_tab.get_speaker_mapping()
+        return self.speaker_persona_tab.get_speaker_mapping()
 
     def refresh_persona_management(self):
-        """페르소나 관리 탭 새로고침"""
-        if self.persona_tab:
-            self.persona_tab.load_personas()
+        """화자 & 페르소나 탭 새로고침"""
+        self.speaker_persona_tab.load_data()

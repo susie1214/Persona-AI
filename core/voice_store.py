@@ -177,6 +177,24 @@ class VoiceStore:
             print(f"[WARN] VoiceStore failed to update name for speaker {speaker_id}: {e}")
             return False
 
+    def delete_speaker(self, speaker_id: str) -> bool:
+        """특정 화자 정보 삭제"""
+        if not self.ok:
+            return False
+
+        try:
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, speaker_id))
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=[point_id],
+                wait=True
+            )
+            print(f"[INFO] VoiceStore deleted speaker: {speaker_id}")
+            return True
+        except Exception as e:
+            print(f"[WARN] VoiceStore failed to delete speaker {speaker_id}: {e}")
+            return False
+
     def delete_all_speakers(self):
         """모든 화자 정보 삭제 (컬렉션 재생성)"""
         if not self.ok:
