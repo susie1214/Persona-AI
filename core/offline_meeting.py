@@ -53,11 +53,11 @@ def _whisper_device(use_gpu: bool) -> str:
     - Linux/Windows (NVIDIA): cuda
     - CPU fallback
     """
-    if os.getenv("FORCE_CPU", "0") == "1":
-        return "cpu"
+    # if os.getenv("FORCE_CPU", "0") == "1":
+    #     return "cpu"
 
-    if not use_gpu:
-        return "cpu"
+    # if not use_gpu:
+    #     return "cpu"
 
     import platform
     import torch
@@ -75,8 +75,8 @@ def _whisper_device(use_gpu: bool) -> str:
     # CUDA 지원 (Linux/Windows)
     if torch.cuda.is_available():
         return "cuda"
-
-    return "cpu"
+    elif not use_gpu or os.getenv("FORCE_CPU", "0") == "1":
+        return "cpu"
 
 
 def _ensure_dirs():
@@ -624,6 +624,81 @@ def _cleanup_temp_file(temp_path: Optional[str]):
             print(f"[WARNING] Failed to remove temporary file: {e}")
 
 
+def _populate_digital_personas(
+    persona_manager,
+    speaker_manager,
+    segments: List[Dict],
+    llm_backend: Optional[str] = None
+):
+    """
+    회의 세그먼트에서 디지털 페르소나를 자동 생성/업데이트
+
+    Phase 1 구현:
+    - 각 화자에 대해 페르소나 존재 여부 확인
+    - 없으면 음성 임베딩으로 새 페르소나 생성
+    - 발언을 RAG 컬렉션에 추가
+
+    Args:
+        persona_manager: DigitalPersonaManager 인스턴스
+        speaker_manager: SpeakerManager 인스턴스
+        segments: 화자가 식별된 세그먼트 리스트
+        llm_backend: LLM 백엔드 (선택)
+    """
+    if not persona_manager or not speaker_manager or not segments:
+        return
+
+    # 화자별 발언 그룹화
+    speaker_utterances = {}
+    for seg in segments:
+        speaker_id = seg.get("speaker", "Unknown")
+        if speaker_id == "Unknown":
+            continue
+
+        if speaker_id not in speaker_utterances:
+            speaker_utterances[speaker_id] = []
+
+        speaker_utterances[speaker_id].append({
+            "text": seg.get("text", ""),
+            "start": seg.get("start", 0.0),
+            "end": seg.get("end", 0.0)
+        })
+
+    # 각 화자에 대해 페르소나 처리
+    for speaker_id, utterances in speaker_utterances.items():
+        try:
+            # 1. 페르소나 존재 여부 확인
+            persona = persona_manager.get_persona(speaker_id)
+
+            if not persona:
+                # 2. 페르소나가 없으면 생성
+                speaker = speaker_manager.get_speaker_by_id(speaker_id)
+                if speaker and speaker.embedding is not None:
+                    # 음성 임베딩이 있으면 페르소나 생성
+                    display_name = speaker_manager.get_speaker_display_name(speaker_id)
+                    persona_manager.create_persona(
+                        speaker_id=speaker_id,
+                        display_name=display_name,
+                        voice_embedding=speaker.embedding,
+                        llm_backend=llm_backend or "openai:gpt-4o-mini"
+                    )
+                    print(f"[INFO] Created digital persona for {speaker_id}")
+
+            # 3. 발언을 RAG에 추가
+            for utt in utterances:
+                if utt["text"].strip():
+                    persona_manager.add_utterance(
+                        speaker_id=speaker_id,
+                        text=utt["text"],
+                        start=utt["start"],
+                        end=utt["end"]
+                    )
+
+            print(f"[INFO] Added {len(utterances)} utterances for {speaker_id}")
+
+        except Exception as e:
+            print(f"[WARN] Failed to populate persona for {speaker_id}: {e}")
+
+
 # ---------- Public API ----------
 
 def process_audio_file(
@@ -635,10 +710,12 @@ def process_audio_file(
     llm_backend: Optional[str] = None,
     settings: Optional[Dict] = None,
     speaker_manager=None,
+    persona_manager=None,
 ) -> Dict:
     """
     오디오 파일 경로를 받아 STT(+옵션: 화자분리) 수행 후
     - segments(list[dict]), markdown(str), title(str), json_path(str) 를 반환
+    - 디지털 페르소나 자동 생성/업데이트 (persona_manager 제공 시)
 
     Args:
         path: 입력 파일 경로 (오디오/비디오)
@@ -648,6 +725,8 @@ def process_audio_file(
         use_llm_summary: LLM 기반 요약 사용 여부
         llm_backend: LLM 백엔드 (예: "openai:gpt-4o-mini")
         settings: 추가 설정 (선택)
+        speaker_manager: 화자 관리자 (선택)
+        persona_manager: 디지털 페르소나 관리자 (선택)
 
     Returns:
         Dict with keys: title, markdown, json_path, segments
@@ -715,7 +794,16 @@ def process_audio_file(
             llm_backend=llm_backend
         )
 
-        # 8) 임시 파일 정리
+        # 8) 디지털 페르소나 자동 생성/업데이트 (Phase 1)
+        if persona_manager and speaker_manager and merged:
+            _populate_digital_personas(
+                persona_manager=persona_manager,
+                speaker_manager=speaker_manager,
+                segments=merged,
+                llm_backend=llm_backend
+            )
+
+        # 9) 임시 파일 정리
         _cleanup_temp_file(temp_wav_path)
 
         # UI에서 사용하기 편하도록 반환

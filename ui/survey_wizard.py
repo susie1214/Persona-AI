@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-설문 마법사 → 저장소 업데이트 → 챗봇 반영
-- 설문 완료 시 PersonaStore.update_from_survey(...)로 저장소 갱신
-- 디스크에도 data/persona/{user_id}.json 로 저장 (백업/호환 목적)
-- persona_updated(str) 시그널로 상위(메인/챗봇)에게 갱신 알림
+디지털 페르소나 사전 지식 입력 마법사
+- 화자에 대한 사전 지식(role, expertise, personality, communication style 등)을 수집
+- DigitalPersonaManager를 통해 페르소나 정보를 저장하고 강화
+- persona_updated(str) 시그널로 상위 컴포넌트에 갱신 알림
 """
 import os
 import json
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from PySide6.QtWidgets import (
     QWizard,
@@ -19,131 +19,194 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QCheckBox,
     QMessageBox,
+    QHBoxLayout,
+    QSpinBox,
 )
 from PySide6.QtCore import Signal
 
-# 저장소 어댑터 (외부 모듈)
-# - 인터페이스 가정:
-#   PersonaStore().update_from_survey(name: str, survey: dict) -> None
-#   PersonaStore().build_system_prompt(name: str) -> str   (선택)
+# 디지털 페르소나 관리자
+from core.digital_persona import DigitalPersonaManager
 from core.persona_store import PersonaStore
+from core.rag_store import RagStore
+from core.voice_store import VoiceStore
 
 
-class PersonaSurveyWizard(QWizard):
+class DigitalPersonaPriorKnowledgeWizard(QWizard):
     """
-    개인 맞춤 페르소나 설문 마법사
+    디지털 페르소나 사전 지식 입력 마법사
+    - 화자의 역할, 전문성, 성격, 커뮤니케이션 스타일 등을 수집
+    - DigitalPersonaManager를 통해 페르소나 강화
     """
 
-    # 예: "조진경" 같은 표시 이름을 전달
+    # 페르소나가 업데이트되면 speaker_id를 전달
     persona_updated = Signal(str)
 
-    def __init__(self, user_id: str = "jkj", display_name: str = "조진경", parent=None):
+    def __init__(
+        self,
+        speaker_id: str,
+        display_name: str,
+        persona_manager: Optional[DigitalPersonaManager] = None,
+        parent=None
+    ):
         super().__init__(parent)
-        self.setWindowTitle("개인 맞춤 페르소나 설문")
-        self.user_id = user_id  # 파일 저장용 식별자
-        self.display_name = display_name  # UI/Store용 이름(표시명)
-        self.store = PersonaStore()
+        self.setWindowTitle(f"디지털 페르소나 설정 - {display_name}")
+        self.speaker_id = speaker_id
+        self.display_name = display_name
 
-        # ------- Page 1: 글쓰기/보고 스타일 -------
-        self.page_style = QWizardPage()
-        self.page_style.setTitle("글쓰기/보고 스타일")
-        L1 = QVBoxLayout(self.page_style)
+        # DigitalPersonaManager 초기화
+        if persona_manager:
+            self.persona_manager = persona_manager
+        else:
+            voice_store = VoiceStore()
+            rag_store = RagStore()
+            persona_store = PersonaStore()
+            self.persona_manager = DigitalPersonaManager(
+                voice_store=voice_store,
+                rag_store=rag_store,
+                persona_store=persona_store,
+                storage_path="data/digital_personas"
+            )
+
+        # ------- Page 1: 기본 정보 및 역할 -------
+        self.page_basic = QWizardPage()
+        self.page_basic.setTitle("기본 정보 및 역할")
+        L1 = QVBoxLayout(self.page_basic)
+
+        self.edit_role = QLineEdit()
+        self.edit_role.setPlaceholderText("예: 백엔드 개발자, 프로덕트 매니저, 디자이너")
+
+        self.edit_department = QLineEdit()
+        self.edit_department.setPlaceholderText("예: 개발팀, 기획팀, 디자인팀")
+
+        self.edit_expertise = QTextEdit()
+        self.edit_expertise.setPlaceholderText(
+            "전문 분야 (쉼표로 구분):\n예: Python, FastAPI, 데이터베이스 설계, 마이크로서비스"
+        )
+        self.edit_expertise.setFixedHeight(80)
+
+        L1.addWidget(QLabel("👤 역할/직책:"))
+        L1.addWidget(self.edit_role)
+        L1.addWidget(QLabel("🏢 부서/팀:"))
+        L1.addWidget(self.edit_department)
+        L1.addWidget(QLabel("💡 전문 분야:"))
+        L1.addWidget(self.edit_expertise)
+
+        # ------- Page 2: 성격 및 커뮤니케이션 스타일 -------
+        self.page_personality = QWizardPage()
+        self.page_personality.setTitle("성격 및 커뮤니케이션 스타일")
+        L2 = QVBoxLayout(self.page_personality)
+
+        self.edit_personality = QTextEdit()
+        self.edit_personality.setPlaceholderText(
+            "성격 키워드 (쉼표로 구분):\n예: 분석적, 논리적, 협력적, 창의적, 세심함"
+        )
+        self.edit_personality.setFixedHeight(70)
 
         self.cmb_tone = QComboBox()
-        self.cmb_tone.addItems(["명확/직설", "정중/공식", "친근/편안", "데이터 중심"])
+        self.cmb_tone.addItems(["명확/직설적", "정중/공식적", "친근/편안함", "데이터 중심"])
 
         self.cmb_format = QComboBox()
         self.cmb_format.addItems(
-            ["개조식, 결론 우선", "서술식", "키워드 중심", "표/차트 활용"]
+            ["개조식, 결론 우선", "서술식, 맥락 중심", "키워드 중심", "표/차트 활용"]
         )
 
         self.cmb_sentence_len = QComboBox()
-        self.cmb_sentence_len.addItems(["짧게", "적당히", "길어도 됨"])
+        self.cmb_sentence_len.addItems(["짧고 간결하게", "적당한 길이", "상세하게"])
 
-        self.txt_jargon = QTextEdit()
-        self.txt_jargon.setPlaceholderText(
-            "자주 쓰는 표현/전문용어/줄임말 (여러 개 입력 가능)"
+        self.edit_jargon = QTextEdit()
+        self.edit_jargon.setPlaceholderText(
+            "자주 쓰는 전문용어/표현 (쉼표로 구분):\n예: 피봇, ASAP, 애자일, KPI"
         )
+        self.edit_jargon.setFixedHeight(70)
 
-        L1.addWidget(QLabel("선호 말투:"))
-        L1.addWidget(self.cmb_tone)
-        L1.addWidget(QLabel("요약/보고 형식:"))
-        L1.addWidget(self.cmb_format)
-        L1.addWidget(QLabel("문장 길이:"))
-        L1.addWidget(self.cmb_sentence_len)
-        L1.addWidget(QLabel("전문 용어/표현:"))
-        L1.addWidget(self.txt_jargon)
+        L2.addWidget(QLabel("🎭 성격 키워드:"))
+        L2.addWidget(self.edit_personality)
+        L2.addWidget(QLabel("💬 선호 말투:"))
+        L2.addWidget(self.cmb_tone)
+        L2.addWidget(QLabel("📝 의사소통 형식:"))
+        L2.addWidget(self.cmb_format)
+        L2.addWidget(QLabel("📏 문장 길이 선호:"))
+        L2.addWidget(self.cmb_sentence_len)
+        L2.addWidget(QLabel("🔤 자주 쓰는 용어/표현:"))
+        L2.addWidget(self.edit_jargon)
 
-        # ------- Page 2: 키워드/알람/리포트 포커스 -------
-        self.page_prefs = QWizardPage()
-        self.page_prefs.setTitle("선호도/알림/리포트 포커스")
-        L2 = QVBoxLayout(self.page_prefs)
+        # ------- Page 3: 경력 및 추가 정보 -------
+        self.page_career = QWizardPage()
+        self.page_career.setTitle("경력 및 추가 정보")
+        L3 = QVBoxLayout(self.page_career)
 
-        self.edit_keywords = QLineEdit()
-        self.edit_keywords.setPlaceholderText(
-            "자주 쓰는 키워드 (쉼표로 구분: ASAP, 애자일, 피봇 ...)"
+        # 경력 연수
+        career_layout = QHBoxLayout()
+        self.spin_career_years = QSpinBox()
+        self.spin_career_years.setMinimum(0)
+        self.spin_career_years.setMaximum(50)
+        self.spin_career_years.setValue(0)
+        career_layout.addWidget(QLabel("💼 경력 연수:"))
+        career_layout.addWidget(self.spin_career_years)
+        career_layout.addWidget(QLabel("년"))
+        career_layout.addStretch()
+
+        self.edit_education = QLineEdit()
+        self.edit_education.setPlaceholderText("예: 컴퓨터공학 학사, MBA")
+
+        self.edit_skills = QTextEdit()
+        self.edit_skills.setPlaceholderText(
+            "주요 기술/도구 (쉼표로 구분):\n예: Docker, Kubernetes, AWS, PostgreSQL"
         )
+        self.edit_skills.setFixedHeight(70)
 
-        self.cmb_alarm_default = QComboBox()
-        self.cmb_alarm_default.addItems(
-            ["회의 10분 전", "회의 30분 전", "회의 1시간 전", "전날 저녁", "이틀 전"]
+        self.edit_interests = QTextEdit()
+        self.edit_interests.setPlaceholderText(
+            "관심 분야/학습 주제 (쉼표로 구분):\n예: 머신러닝, 클라우드 아키텍처, UX 디자인"
         )
+        self.edit_interests.setFixedHeight(70)
 
-        self.edit_alarm_fields = QLineEdit()
-        self.edit_alarm_fields.setPlaceholderText(
-            "알람 포함 정보 (쉼표로: 제목, 목적, 참석자, 준비물 ...)"
-        )
+        L3.addLayout(career_layout)
+        L3.addWidget(QLabel("🎓 학력:"))
+        L3.addWidget(self.edit_education)
+        L3.addWidget(QLabel("🛠️ 주요 기술/도구:"))
+        L3.addWidget(self.edit_skills)
+        L3.addWidget(QLabel("📚 관심 분야:"))
+        L3.addWidget(self.edit_interests)
 
-        self.cmb_report_focus = QComboBox()
-        self.cmb_report_focus.addItems(
-            ["정확성", "간결성", "데이터 시각화", "KPI/Action"]
-        )
-
-        self.chk_english = QCheckBox("영어 병기 허용")
-
-        L2.addWidget(QLabel("자주 쓰는 키워드:"))
-        L2.addWidget(self.edit_keywords)
-        L2.addWidget(QLabel("알람 기본값:"))
-        L2.addWidget(self.cmb_alarm_default)
-        L2.addWidget(QLabel("알람에 포함할 필드:"))
-        L2.addWidget(self.edit_alarm_fields)
-        L2.addWidget(QLabel("보고서 포커스:"))
-        L2.addWidget(self.cmb_report_focus)
-        L2.addWidget(self.chk_english)
-
-        # ------- Page 3: 엔진/메모 & 동의 -------
-        self.page_engine = QWizardPage()
-        self.page_engine.setTitle("엔진/메모 & 동의")
-        L3 = QVBoxLayout(self.page_engine)
+        # ------- Page 4: LLM 설정 및 동의 -------
+        self.page_settings = QWizardPage()
+        self.page_settings.setTitle("LLM 설정 및 동의")
+        L4 = QVBoxLayout(self.page_settings)
 
         self.cmb_backend = QComboBox()
         self.cmb_backend.addItems(
             [
                 "openai:gpt-4o-mini",
+                "openai:gpt-4o",
                 "ollama:llama3",
                 "ax:A.X-4.0",
                 "midm:Midm-2.0-Mini-Instruct",
             ]
         )
 
-        self.memo = QTextEdit()
-        self.memo.setPlaceholderText("추가 메모(어투/예외/도메인 선호/금지어 등)")
+        self.edit_memo = QTextEdit()
+        self.edit_memo.setPlaceholderText(
+            "추가 메모/특이사항:\n예: 특정 주제에 대한 선호도, 금지어, 특별 지시사항 등"
+        )
+        self.edit_memo.setFixedHeight(80)
 
-        self.chk_consent = QCheckBox("개인화 학습·서비스 제공 목적 활용에 동의합니다.")
+        self.chk_consent = QCheckBox("디지털 페르소나 생성 및 학습 목적 데이터 활용에 동의합니다.")
 
-        L3.addWidget(QLabel("기본 백엔드:"))
-        L3.addWidget(self.cmb_backend)
-        L3.addWidget(QLabel("메모:"))
-        L3.addWidget(self.memo)
-        L3.addWidget(self.chk_consent)
+        L4.addWidget(QLabel("🤖 기본 LLM 백엔드:"))
+        L4.addWidget(self.cmb_backend)
+        L4.addWidget(QLabel("📋 추가 메모:"))
+        L4.addWidget(self.edit_memo)
+        L4.addWidget(QLabel(""))
+        L4.addWidget(self.chk_consent)
 
         # 페이지 등록
-        self.addPage(self.page_style)
-        self.addPage(self.page_prefs)
-        self.addPage(self.page_engine)
+        self.addPage(self.page_basic)
+        self.addPage(self.page_personality)
+        self.addPage(self.page_career)
+        self.addPage(self.page_settings)
 
-        # Finish(완료) 시그널 → on_finish
-        # - accepted는 Finish 버튼이 눌리고 검증을 통과했을 때 방출
+        # Finish 시그널 연결
         self.accepted.connect(self.on_finish)
 
     # --- 내부 유틸 ---
@@ -154,77 +217,82 @@ class PersonaSurveyWizard(QWizard):
     # --- 제출 처리 ---
     def on_finish(self):
         """
-        Finish 후 호출: 저장소 업데이트 + 파일 저장 + 신호 발행
-        (동의 체크는 accept()에서 보장)
+        사전 지식을 수집하고 DigitalPersonaManager를 통해 페르소나를 강화
         """
-        survey: Dict = {
-            "tone": self.cmb_tone.currentText(),
-            "summary_format": self.cmb_format.currentText(),
-            "sentence_len": self.cmb_sentence_len.currentText(),
-            "jargon": self.txt_jargon.toPlainText().strip(),
-            "keywords": self._split_csv(self.edit_keywords.text()),
-            "alarm": self.cmb_alarm_default.currentText(),
-            "alarm_fields": self._split_csv(self.edit_alarm_fields.text()),
-            "report_focus": self.cmb_report_focus.currentText(),
-            "backend": self.cmb_backend.currentText(),
-            "english_bilingual": bool(self.chk_english.isChecked()),
-            "memo": self.memo.toPlainText().strip(),
+        # 사전 지식 딕셔너리 구성
+        prior_knowledge = {
+            "role": self.edit_role.text().strip(),
+            "department": self.edit_department.text().strip(),
+            "expertise": self._split_csv(self.edit_expertise.toPlainText()),
+            "personality_keywords": self._split_csv(self.edit_personality.toPlainText()),
+            "communication_style": {
+                "tone": self.cmb_tone.currentText(),
+                "format": self.cmb_format.currentText(),
+                "sentence_length": self.cmb_sentence_len.currentText(),
+                "jargon": self._split_csv(self.edit_jargon.toPlainText()),
+            },
+            "career": {
+                "years": self.spin_career_years.value(),
+                "education": self.edit_education.text().strip(),
+                "skills": self._split_csv(self.edit_skills.toPlainText()),
+                "interests": self._split_csv(self.edit_interests.toPlainText()),
+            },
+            "llm_backend": self.cmb_backend.currentText(),
+            "memo": self.edit_memo.toPlainText().strip(),
         }
 
-        # 1) 저장소 갱신
+        # DigitalPersonaManager를 통해 페르소나 강화
         try:
-            self.store.update_from_survey(self.display_name, survey)
+            success = self.persona_manager.enrich_from_prior_knowledge(
+                speaker_id=self.speaker_id,
+                prior_knowledge=prior_knowledge
+            )
+
+            if success:
+                QMessageBox.information(
+                    self,
+                    "페르소나 업데이트 완료",
+                    f"'{self.display_name}'의 디지털 페르소나가 성공적으로 업데이트되었습니다."
+                )
+
+                # 페르소나 업데이트 신호 발행
+                self.persona_updated.emit(self.speaker_id)
+            else:
+                QMessageBox.warning(
+                    self,
+                    "페르소나 업데이트 실패",
+                    f"페르소나를 찾을 수 없습니다: {self.speaker_id}\n먼저 음성 데이터가 수집되어야 합니다."
+                )
         except Exception as e:
             QMessageBox.critical(
                 self,
-                "저장소 업데이트 실패",
-                f"PersonaStore 업데이트 중 오류가 발생했습니다.\n{e}",
-            )
-            # 저장소 실패해도 파일 백업은 시도
-        # 2) 디스크 백업 (호환 유지)
-        try:
-            os.makedirs("data/persona", exist_ok=True)
-            payload = {
-                "user_id": self.user_id,
-                "name": self.display_name,
-                "style": {
-                    "tone": survey["tone"],
-                    "format": survey["summary_format"],
-                    "sentence_len": survey["sentence_len"],
-                    "jargon": survey["jargon"],
-                    "keywords": survey["keywords"],
-                },
-                "alerts": {
-                    "remind": survey["alarm"],
-                    "fields": survey["alarm_fields"],
-                },
-                "report_focus": survey["report_focus"],
-                "backend": survey["backend"],
-                "english_bilingual": survey["english_bilingual"],
-                "memo": survey["memo"],
-                "consent": True,
-            }
-            with open(f"data/persona/{self.user_id}.json", "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            QMessageBox.warning(
-                self, "파일 저장 경고", f"로컬 백업 저장에 실패했습니다.\n{e}"
+                "오류 발생",
+                f"페르소나 업데이트 중 오류가 발생했습니다.\n{e}"
             )
 
-        # 3) 상위에 "이름" 신호 발행 → 챗봇/세션이 즉시 반영하도록 훅 연결
+        # 선택적: 레거시 호환을 위한 파일 백업
         try:
-            self.persona_updated.emit(self.display_name)
+            os.makedirs("data/persona", exist_ok=True)
+            backup_payload = {
+                "speaker_id": self.speaker_id,
+                "display_name": self.display_name,
+                "prior_knowledge": prior_knowledge,
+                "consent": True,
+            }
+            with open(f"data/persona/{self.speaker_id}.json", "w", encoding="utf-8") as f:
+                json.dump(backup_payload, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            # 시그널 에러는 드물지만, 안전망
-            QMessageBox.warning(
-                self, "신호 발행 경고", f"페르소나 갱신 신호 발행 중 문제 발생\n{e}"
-            )
+            print(f"[WARN] Failed to save backup file: {e}")
 
     # Finish 눌렀을 때 동의 체크 강제
     def accept(self):
         if not self.chk_consent.isChecked():
             QMessageBox.information(
-                self, "동의 필요", "개인화 학습·서비스 제공 목적 활용에 동의해 주세요."
+                self, "동의 필요", "디지털 페르소나 생성 및 학습 목적 데이터 활용에 동의해 주세요."
             )
             return
         super().accept()
+
+
+# 레거시 호환을 위한 별칭 유지
+PersonaSurveyWizard = DigitalPersonaPriorKnowledgeWizard

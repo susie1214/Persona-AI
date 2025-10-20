@@ -23,6 +23,9 @@ from core.summarizer import (
 from core.rag_store import RagStore
 from core.adapter import AdapterManager
 from core.speaker import SpeakerManager
+from core.digital_persona import DigitalPersonaManager
+from core.persona_store import PersonaStore
+from core.voice_store import VoiceStore
 import numpy as np
 from core.schedule_store import Schedule as JSONSchedule, save_schedule as json_save, list_month as json_list_month, new_id as json_new_id
 
@@ -44,8 +47,51 @@ class MeetingConsole(QMainWindow):
         self.resize(1280, 860)
 
         self.state = MeetingState()
-        self.speaker_manager = SpeakerManager()
-        self.audio_worker = AudioWorker(self.state, speaker_manager=self.speaker_manager)
+
+        # Core 컴포넌트 초기화
+        os.makedirs("data/qdrant_db", exist_ok=True)
+        os.makedirs("data/digital_personas", exist_ok=True)
+
+        # RagStore 먼저 초기화 (복잡한 초기화 과정)
+        print("[INFO] Initializing RagStore...")
+        self.rag = RagStore(persist_path="data/qdrant_db")
+
+        # VoiceStore는 별도 디렉토리 사용 (Qdrant 클라이언트 충돌 방지)
+        print("[INFO] Initializing VoiceStore...")
+        os.makedirs("data/qdrant_db/voice", exist_ok=True)
+        self.voice_store = VoiceStore(persist_path="data/qdrant_db/voice")
+
+        # PersonaStore 초기화
+        print("[INFO] Initializing PersonaStore...")
+        self.persona_store = PersonaStore()
+
+        # Speaker & Persona 관리자 초기화
+        self.speaker_manager = SpeakerManager(voice_store=self.voice_store)
+
+        # DigitalPersonaManager 초기화 (항상 시도)
+        self.persona_manager = None
+        if self.rag.ok and self.voice_store.ok:
+            try:
+                self.persona_manager = DigitalPersonaManager(
+                    voice_store=self.voice_store,
+                    rag_store=self.rag,
+                    persona_store=self.persona_store,
+                    storage_path="data/digital_personas"
+                )
+                print("[INFO] DigitalPersonaManager initialized successfully")
+            except Exception as e:
+                print(f"[WARN] DigitalPersonaManager initialization failed: {e}")
+                self.persona_manager = None
+        else:
+            print("[WARN] Skipping DigitalPersonaManager - RAG or VoiceStore not available")
+            print(f"       RagStore.ok: {self.rag.ok}, VoiceStore.ok: {self.voice_store.ok}")
+
+        # Audio & Diarization Workers
+        self.audio_worker = AudioWorker(
+            self.state,
+            speaker_manager=self.speaker_manager,
+            persona_manager=self.persona_manager
+        )
         self.diar_worker = DiarizationWorker(self.state, speaker_manager=self.speaker_manager)
         self.adapter = AdapterManager()
         self.recording = False
@@ -62,10 +108,6 @@ class MeetingConsole(QMainWindow):
         self._apply_theme()
         self._connect_signals()
 
-
-
-        os.makedirs("data/qdrant_db", exist_ok=True)
-        self.rag = RagStore(persist_path="data/qdrant_db")
         self.on_status("✓ RAG Store 초기화 완료" if self.rag.ok else "⚠ RAG Store 사용 불가")
 
         self.chat_dock = QDockWidget("Persona Chatbot", self)
@@ -245,7 +287,11 @@ class MeetingConsole(QMainWindow):
         self.tabs.addTab(self.live_root, "Live")
 
     def _build_minutes_tab(self):
-        self.meeting_notes = MeetingNotesView(self)
+        self.meeting_notes = MeetingNotesView(
+            self,
+            speaker_manager=self.speaker_manager,
+            persona_manager=self.persona_manager
+        )
         self.tabs.addTab(self.meeting_notes, "Minutes")
 
     def _build_schedule_tab(self):
@@ -454,7 +500,10 @@ class MeetingConsole(QMainWindow):
         layout.addWidget(QLabel("🔧 시스템 설정"))
         layout.addWidget(system_group)
 
-        self.meeting_settings = MeetingSettingsWidget(speaker_manager=self.speaker_manager)
+        self.meeting_settings = MeetingSettingsWidget(
+            speaker_manager=self.speaker_manager,
+            persona_manager=self.persona_manager
+        )
         self.meeting_settings.speaker_mapping_changed.connect(self.on_speaker_mapping_changed)
         layout.addWidget(self.meeting_settings)
 

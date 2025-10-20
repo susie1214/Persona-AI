@@ -5,7 +5,9 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QTabWidget, QGroupBox, QFormLayout
 )
 from PySide6.QtCore import Qt, Signal
+from typing import Optional
 from core.speaker import SpeakerManager
+from core.digital_persona import DigitalPersonaManager
 
 TEMPLATES = [
     ("일반 회의", "general"),
@@ -141,11 +143,18 @@ class MeetingSettingsWidget(QWidget):
     회의 설정 및 화자 매핑 관리를 위한 탭 기반 위젯
     - 회의 설정: 참석자, 컨텍스트, 템플릿, 용어집
     - 화자 매핑: 화자 ID와 실제 이름 매핑 관리
+    - 페르소나 관리: 디지털 페르소나 생성 및 관리
     """
     settings_changed = Signal(dict)
     speaker_mapping_changed = Signal(dict)
+    persona_updated = Signal(str)  # speaker_id 전달
 
-    def __init__(self, speaker_manager=None, parent=None):
+    def __init__(
+        self,
+        speaker_manager: Optional[SpeakerManager] = None,
+        persona_manager: Optional[DigitalPersonaManager] = None,
+        parent=None
+    ):
         super().__init__(parent)
         self._settings = {
             "attendees": [],
@@ -155,6 +164,7 @@ class MeetingSettingsWidget(QWidget):
             "custom_glossary": "",
         }
         self._speaker_manager = speaker_manager
+        self._persona_manager = persona_manager
 
         self.init_ui()
 
@@ -173,6 +183,18 @@ class MeetingSettingsWidget(QWidget):
         self.speaker_tab = SpeakerMappingWidget(speaker_manager=self._speaker_manager)
         self.speaker_tab.mapping_changed.connect(self.speaker_mapping_changed.emit)
         self.tab_widget.addTab(self.speaker_tab, "화자 매핑")
+
+        # 페르소나 관리 탭 (디지털 페르소나 관리)
+        if self._persona_manager:
+            from ui.persona_management import PersonaManagementWidget
+            self.persona_tab = PersonaManagementWidget(
+                persona_manager=self._persona_manager,
+                speaker_manager=self._speaker_manager
+            )
+            self.persona_tab.persona_updated.connect(self.persona_updated.emit)
+            self.tab_widget.addTab(self.persona_tab, "페르소나 관리")
+        else:
+            self.persona_tab = None
 
         # 심플 스타일
         self.setStyleSheet("""
@@ -290,3 +312,8 @@ class MeetingSettingsWidget(QWidget):
     def get_speaker_mapping(self) -> dict:
         """현재 화자 매핑 딕셔너리 반환"""
         return self.speaker_tab.get_speaker_mapping()
+
+    def refresh_persona_management(self):
+        """페르소나 관리 탭 새로고침"""
+        if self.persona_tab:
+            self.persona_tab.load_personas()

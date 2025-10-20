@@ -18,13 +18,14 @@ class _SummWorker(QObject):
     sig_error = Signal(str)
     sig_progress = Signal(int, int, str)  # (current, total, filename)
 
-    def __init__(self, paths, settings, use_llm_summary=True, llm_backend=None, speaker_manager=None):
+    def __init__(self, paths, settings, use_llm_summary=True, llm_backend=None, speaker_manager=None, persona_manager=None):
         super().__init__()
         self.paths = paths if isinstance(paths, list) else [paths]
         self.settings = settings or {}
         self.use_llm_summary = use_llm_summary
         self.llm_backend = llm_backend
         self.speaker_manager = speaker_manager
+        self.persona_manager = persona_manager
 
     def run(self):
         total = len(self.paths)
@@ -46,7 +47,8 @@ class _SummWorker(QObject):
                     use_llm_summary=self.use_llm_summary,
                     llm_backend=self.llm_backend,
                     settings=self.settings,
-                    speaker_manager=self.speaker_manager
+                    speaker_manager=self.speaker_manager,
+                    persona_manager=self.persona_manager
                 )
 
                 all_results.append(res)
@@ -101,9 +103,11 @@ class _SummWorker(QObject):
 
 class MeetingNotesView(QWidget):
     """업로드 → 요약/회의록 → TXT/MD/HTML 저장 & 클립보드 복사"""
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, speaker_manager=None, persona_manager=None):
         super().__init__(parent)
         self.main_console = parent
+        self.speaker_manager = speaker_manager
+        self.persona_manager = persona_manager
         self._settings_cache = {}  # meeting_settings에서 가져다 넣어도 됨
         L = QVBoxLayout(self)
 
@@ -223,9 +227,13 @@ class MeetingNotesView(QWidget):
         llm_backend = self.combo_llm_backend.currentText() if use_llm else None
 
         # speaker_manager 가져오기 (main_console에서)
-        speaker_manager = None
-        if self.main_console and hasattr(self.main_console, 'speaker_manager'):
+        speaker_manager = self.speaker_manager
+        persona_manager = self.persona_manager
+
+        if not speaker_manager and self.main_console and hasattr(self.main_console, 'speaker_manager'):
             speaker_manager = self.main_console.speaker_manager
+        if not persona_manager and self.main_console and hasattr(self.main_console, 'persona_manager'):
+            persona_manager = self.main_console.persona_manager
 
         self.thread = QThread(self)
         self.worker = _SummWorker(
@@ -233,7 +241,8 @@ class MeetingNotesView(QWidget):
             self._settings_cache,
             use_llm_summary=use_llm,
             llm_backend=llm_backend,
-            speaker_manager=speaker_manager
+            speaker_manager=speaker_manager,
+            persona_manager=persona_manager
         )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)

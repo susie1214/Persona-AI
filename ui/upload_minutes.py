@@ -30,7 +30,17 @@ class _Worker(QObject):
     sig_done = Signal(dict)
     sig_error = Signal(str)
 
-    def __init__(self, path: str, asr_model: str, use_gpu: bool, diarize: bool, use_llm_summary: bool = False, llm_backend: Optional[str] = None):
+    def __init__(
+        self,
+        path: str,
+        asr_model: str,
+        use_gpu: bool,
+        diarize: bool,
+        use_llm_summary: bool = False,
+        llm_backend: Optional[str] = None,
+        speaker_manager=None,
+        persona_manager=None
+    ):
         super().__init__()
         self.path = path
         self.asr_model = asr_model
@@ -38,6 +48,8 @@ class _Worker(QObject):
         self.diarize = diarize
         self.use_llm_summary = use_llm_summary
         self.llm_backend = llm_backend
+        self.speaker_manager = speaker_manager
+        self.persona_manager = persona_manager
 
     def run(self):
         try:
@@ -47,16 +59,20 @@ class _Worker(QObject):
                 use_gpu=self.use_gpu,
                 diarize=self.diarize,
                 use_llm_summary=self.use_llm_summary,
-                llm_backend=self.llm_backend
+                llm_backend=self.llm_backend,
+                speaker_manager=self.speaker_manager,
+                persona_manager=self.persona_manager
             )
             self.sig_done.emit(res)
         except Exception as e:
             self.sig_error.emit(str(e))
 
 class UploadMinutesWidget(QWidget):
-    def __init__(self):
+    def __init__(self, speaker_manager=None, persona_manager=None):
         super().__init__()
         self.setObjectName("UploadMinutes")
+        self.speaker_manager = speaker_manager
+        self.persona_manager = persona_manager
         L = QVBoxLayout(self)
 
         self.title = QLabel("<h2>모든 회의가 <span style='color:#3b82f6'>기록</span>되는 순간.</h2>"
@@ -133,7 +149,11 @@ class UploadMinutesWidget(QWidget):
         llm_backend = self.combo_llm_backend.currentText() if use_llm_summary else None
 
         self.thread = QThread()
-        self.worker = _Worker(path, asr_model, use_gpu, diarize, use_llm_summary, llm_backend)
+        self.worker = _Worker(
+            path, asr_model, use_gpu, diarize,
+            use_llm_summary, llm_backend,
+            self.speaker_manager, self.persona_manager
+        )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.sig_done.connect(self.on_done)

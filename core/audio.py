@@ -83,7 +83,12 @@ class AudioWorker(QObject):
     sig_status = Signal(str)
     sig_new_speaker_detected = Signal(str)  # 새 화자 감지 신호
 
-    def __init__(self, state: MeetingState, speaker_manager: Optional[SpeakerManager] = None):
+    def __init__(
+        self,
+        state: MeetingState,
+        speaker_manager: Optional[SpeakerManager] = None,
+        persona_manager=None
+    ):
         super().__init__()
         self.state = state
         self._stop = threading.Event()
@@ -99,6 +104,9 @@ class AudioWorker(QObject):
 
         # SpeakerManager 통합 (임베딩 기반 화자 인식)
         self.speaker_manager = speaker_manager if speaker_manager else SpeakerManager()
+
+        # DigitalPersonaManager 통합 (Phase 1)
+        self.persona_manager = persona_manager
 
         # 화자 연속성 추적
         self._last_speaker_id = None
@@ -317,6 +325,7 @@ class AudioWorker(QObject):
                         speaker_name=self.get_or_assign_speaker_id(speaker_id)
                     )
                     self.sig_transcript.emit(speaker_seg)
+                    self._populate_persona_utterance(speaker_seg)  # 디지털 페르소나에 발언 추가
                     processed_speakers.append(self.get_or_assign_speaker_id(speaker_id))
                 else:
                     # STT 실패 시 기본 표시
@@ -333,6 +342,46 @@ class AudioWorker(QObject):
         # 겹침 상태 로깅
         if processed_speakers:
             self.sig_status.emit(f"대화 겹침 분리 처리: {', '.join(processed_speakers)}")
+
+    def _populate_persona_utterance(self, segment: Segment):
+        """
+        디지털 페르소나에 발언 추가 (Phase 1)
+
+        Args:
+            segment: 발언 세그먼트
+        """
+        if not self.persona_manager or not segment.text or segment.text == "[음성 감지]":
+            return
+
+        try:
+            speaker_id = segment.speaker_name
+            if not speaker_id or speaker_id == "Unknown":
+                return
+
+            # 1. 페르소나가 없으면 생성
+            persona = self.persona_manager.get_persona(speaker_id)
+            if not persona:
+                speaker = self.speaker_manager.get_speaker_by_id(speaker_id)
+                if speaker and speaker.embedding is not None:
+                    display_name = self.speaker_manager.get_speaker_display_name(speaker_id)
+                    self.persona_manager.create_persona(
+                        speaker_id=speaker_id,
+                        display_name=display_name,
+                        voice_embedding=speaker.embedding,
+                        llm_backend="openai:gpt-4o-mini"
+                    )
+                    print(f"[INFO] Created digital persona for {speaker_id} (live)")
+
+            # 2. 발언을 RAG에 추가
+            self.persona_manager.add_utterance(
+                speaker_id=speaker_id,
+                text=segment.text,
+                start=segment.start,
+                end=segment.end
+            )
+
+        except Exception as e:
+            print(f"[WARN] Failed to populate persona utterance: {e}")
 
     def _get_embedding_inference(self):
         """임베딩 추출 모델 lazy loading"""
@@ -737,6 +786,7 @@ class AudioWorker(QObject):
                         seg.speaker_id = original_spk_id
                         seg.speaker_name = self.get_or_assign_speaker_id(original_spk_id)
                         self.sig_transcript.emit(seg)
+                        self._populate_persona_utterance(seg)  # 디지털 페르소나에 발언 추가
 
                 chunk_offset_seconds += CHUNK_SECONDS
 
