@@ -317,8 +317,9 @@ def _match_speakers_by_overlap(
 
                 # SpeakerManager로 화자 식별
                 speaker_id, confidence = speaker_manager.identify_speaker(segment_embedding, threshold=0.72)
-                speaker = speaker_id
-                print(f"[INFO] Identified speaker: {speaker_id} (confidence: {confidence:.3f})")
+                # 화자 ID를 표시 이름으로 변환
+                speaker = speaker_manager.get_speaker_display_name(speaker_id)
+                print(f"[INFO] Identified speaker: {speaker_id} -> {speaker} (confidence: {confidence:.3f})")
 
             except Exception as e:
                 print(f"[WARNING] Speaker identification failed, using pyannote label: {e}")
@@ -365,8 +366,13 @@ def _match_speakers_by_overlap(
             else:
                 speaker = pyannote_label
 
+        # speaker_id를 표시 이름으로 변환 (speaker_manager가 있는 경우)
+        display_name = speaker
+        if speaker_manager and speaker != "Unknown":
+            display_name = speaker_manager.get_speaker_display_name(speaker)
+
         out.append({
-            "speaker": speaker,
+            "speaker": display_name,
             "text": w_text,
             "start": w_start,
             "end": w_end,
@@ -802,6 +808,12 @@ def process_audio_file(
                 segments=merged,
                 llm_backend=llm_backend
             )
+
+            # 파일 전사 완료 = 1회 회의 완료 처리
+            speaker_ids = list(set(seg.get('speaker') for seg in merged if seg.get('speaker')))
+            if speaker_ids:
+                persona_manager.on_meeting_ended(speaker_ids)
+                print(f"[INFO] File transcription completed: meeting count updated for {len(speaker_ids)} speakers")
 
         # 9) 임시 파일 정리
         _cleanup_temp_file(temp_wav_path)

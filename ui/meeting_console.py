@@ -570,6 +570,14 @@ class MeetingConsole(QMainWindow):
             self.diar_worker.stop()
         except Exception:
             pass
+
+        # 회의 종료: 참여한 화자들의 meeting_count 증가 + 자동 학습
+        if self.persona_manager and self.state.speaker_map:
+            speaker_ids = list(self.state.speaker_map.keys())
+            if speaker_ids:
+                self.persona_manager.on_meeting_ended(speaker_ids)
+                self.on_status(f"회의 종료: {len(speaker_ids)}명 참여자 기록 업데이트")
+
         if saved_path:
             duration = time.time() - self.recording_start_time if self.recording_start_time else 0
             self.on_status(f"Stopped. 녹음 저장 완료: {saved_path} (시간: {fmt_time(duration)})")

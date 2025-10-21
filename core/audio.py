@@ -322,11 +322,11 @@ class AudioWorker(QObject):
                         end=overlap_end,
                         text=speaker_text,
                         speaker_id=speaker_id,
-                        speaker_name=self.get_or_assign_speaker_id(speaker_id)
+                        speaker_name=self.speaker_manager.get_speaker_display_name(speaker_id)
                     )
                     self.sig_transcript.emit(speaker_seg)
                     self._populate_persona_utterance(speaker_seg)  # 디지털 페르소나에 발언 추가
-                    processed_speakers.append(self.get_or_assign_speaker_id(speaker_id))
+                    processed_speakers.append(self.speaker_manager.get_speaker_display_name(speaker_id))
                 else:
                     # STT 실패 시 기본 표시
                     overlap_seg = Segment(
@@ -334,10 +334,10 @@ class AudioWorker(QObject):
                         end=overlap_end,
                         text="[음성 감지]",
                         speaker_id=speaker_id,
-                        speaker_name=self.get_or_assign_speaker_id(speaker_id)
+                        speaker_name=self.speaker_manager.get_speaker_display_name(speaker_id)
                     )
                     self.sig_transcript.emit(overlap_seg)
-                    processed_speakers.append(self.get_or_assign_speaker_id(speaker_id))
+                    processed_speakers.append(self.speaker_manager.get_speaker_display_name(speaker_id))
 
         # 겹침 상태 로깅
         if processed_speakers:
@@ -354,7 +354,7 @@ class AudioWorker(QObject):
             return
 
         try:
-            speaker_id = segment.speaker_name
+            speaker_id = segment.speaker_id
             if not speaker_id or speaker_id == "Unknown":
                 return
 
@@ -784,7 +784,8 @@ class AudioWorker(QObject):
                             seg.start, seg.end, wav_bytes, seg.text
                         )
                         seg.speaker_id = original_spk_id
-                        seg.speaker_name = self.get_or_assign_speaker_id(original_spk_id)
+                        # SpeakerManager에서 설정한 표시 이름 사용
+                        seg.speaker_name = self.speaker_manager.get_speaker_display_name(original_spk_id)
                         self.sig_transcript.emit(seg)
                         self._populate_persona_utterance(seg)  # 디지털 페르소나에 발언 추가
 

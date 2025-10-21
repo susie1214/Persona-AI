@@ -56,6 +56,7 @@ class DigitalPersona:
     # RAG 컬렉션
     personal_collection: Optional[str] = None  # 개인 발언 전용 컬렉션
     utterance_count: int = 0  # 총 발언 수
+    meeting_count: int = 0  # 참여한 회의 횟수 (녹음 시작->종료 기준)
 
     # 메타데이터
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -90,7 +91,7 @@ class DigitalPersona:
         return cls(**data)
 
     def generate_system_prompt(self) -> str:
-        """페르소나 기반 시스템 프롬프트 생성"""
+        """페르소나 기반 동적 시스템 프롬프트 생성 (학습된 패턴 반영)"""
         parts = []
 
         # 기본 역할
@@ -112,23 +113,46 @@ class DigitalPersona:
             personality_str = ", ".join(self.personality_keywords)
             parts.append(f"성격 특징: {personality_str}")
 
-        # 말투 스타일
+        # 말투 스타일 (초기 설문조사)
         if self.communication_style:
             tone = self.communication_style.get('tone', '명확')
             format_style = self.communication_style.get('format', '서술식')
-            parts.append(f"말투: {tone}하고 {format_style}으로 답변합니다.")
+            parts.append(f"기본 말투: {tone}하고 {format_style}으로 답변합니다.")
 
-        # 말투 패턴
-        if self.speech_patterns:
+        # 학습된 말투 패턴 (3회 이상 회의 참여 시 반영)
+        if self.speech_patterns and self.meeting_count >= 3:
+            parts.append("\n[학습된 말투 특징]")
+
+            # 자주 사용하는 표현
             if 'common_phrases' in self.speech_patterns:
-                phrases = self.speech_patterns['common_phrases'][:3]  # 상위 3개
-                parts.append(f"자주 사용하는 표현: {', '.join(phrases)}")
+                phrases = self.speech_patterns['common_phrases'][:3]
+                if phrases:
+                    parts.append(f"자주 사용하는 표현: {', '.join(phrases)}")
+
+            # 문장 끝 표현
+            if 'sentence_endings' in self.speech_patterns:
+                endings = self.speech_patterns['sentence_endings'][:3]
+                if endings:
+                    parts.append(f"문장 끝 표현: {', '.join(endings)}")
+
+            # 발언 통계
+            avg_words = self.speech_patterns.get('avg_words_per_utterance', 0)
+            if avg_words > 0:
+                if avg_words < 10:
+                    parts.append("답변 스타일: 간결하고 핵심만 전달")
+                elif avg_words < 20:
+                    parts.append("답변 스타일: 적절한 길이로 설명")
+                else:
+                    parts.append("답변 스타일: 상세하고 구체적으로 설명")
 
         # 종합
         system_prompt = "\n".join(parts)
 
         # 기본 가이드라인 추가
-        system_prompt += "\n\n답변 시 이 사람의 성격과 말투를 재현하되, 정확하고 유용한 정보를 제공하세요."
+        if self.meeting_count >= 3:
+            system_prompt += "\n\n답변 시 위의 학습된 말투 특징을 최대한 반영하여, 이 사람처럼 자연스럽게 대화하세요."
+        else:
+            system_prompt += "\n\n답변 시 이 사람의 성격과 말투를 재현하되, 정확하고 유용한 정보를 제공하세요."
 
         return system_prompt
 
@@ -270,7 +294,31 @@ class DigitalPersonaManager:
         # 발언 수 증가
         persona.utterance_count += 1
         persona.updated_at = datetime.now().isoformat()
+
         self.save_persona(speaker_id)
+
+    def on_meeting_ended(self, speaker_ids: List[str]):
+        """
+        회의 종료 시 호출 (녹음 종료)
+        참여한 모든 화자의 meeting_count 증가 + 3회마다 자동 학습
+        """
+        for speaker_id in speaker_ids:
+            persona = self.get_persona(speaker_id)
+            if not persona:
+                continue
+
+            # 회의 횟수 증가
+            persona.meeting_count += 1
+            persona.updated_at = datetime.now().isoformat()
+
+            print(f"[INFO] Meeting ended for {speaker_id} (meeting #{persona.meeting_count})")
+
+            # 3회 회의마다 자동 말투 패턴 업데이트
+            if persona.meeting_count > 0 and persona.meeting_count % 3 == 0:
+                print(f"[INFO] Auto-updating speech patterns for {speaker_id} (meeting #{persona.meeting_count})")
+                self.auto_update_speech_patterns(speaker_id)
+
+            self.save_persona(speaker_id)
 
     def enrich_from_prior_knowledge(
         self,
@@ -362,7 +410,9 @@ class DigitalPersonaManager:
 
         texts = [u['text'] for u in utterances]
 
-        # 간단한 패턴 분석 (실제로는 더 정교한 NLP 사용 가능)
+        # 간단한 패턴 분석
+        from collections import Counter
+
         patterns = {
             'total_utterances': len(texts),
             'avg_length': sum(len(t) for t in texts) / len(texts),
@@ -370,10 +420,7 @@ class DigitalPersonaManager:
             'avg_words_per_utterance': sum(len(t.split()) for t in texts) / len(texts),
         }
 
-        # 자주 사용하는 구문 (간단한 n-gram)
-        from collections import Counter
-
-        # 2-gram 분석
+        # 자주 사용하는 구문 (2-gram)
         bigrams = []
         for text in texts:
             words = text.split()
@@ -382,7 +429,43 @@ class DigitalPersonaManager:
         common_bigrams = Counter(bigrams).most_common(10)
         patterns['common_phrases'] = [phrase for phrase, _ in common_bigrams]
 
+        # 문장 끝 표현 분석 (말투 특징)
+        endings = []
+        for text in texts:
+            sentences = [s.strip() for s in text.split('.') if s.strip()]
+            for sent in sentences:
+                if len(sent) > 3:
+                    endings.append(sent[-3:])  # 마지막 3글자
+
+        common_endings = Counter(endings).most_common(5)
+        patterns['sentence_endings'] = [end for end, _ in common_endings]
+
         return patterns
+
+    def auto_update_speech_patterns(self, speaker_id: str):
+        """
+        자동 말투 패턴 업데이트 (5회 발언마다 호출)
+        """
+        persona = self.get_persona(speaker_id)
+        if not persona:
+            return
+
+        # 패턴 분석
+        patterns = self.analyze_speech_patterns(speaker_id)
+
+        if not patterns:
+            return
+
+        # 페르소나 업데이트
+        persona.speech_patterns = patterns
+        persona.updated_at = datetime.now().isoformat()
+
+        print(f"[INFO] Updated speech patterns for {speaker_id}:")
+        print(f"  - Total utterances: {patterns.get('total_utterances', 0)}")
+        print(f"  - Common phrases: {patterns.get('common_phrases', [])[:3]}")
+        print(f"  - Sentence endings: {patterns.get('sentence_endings', [])[:3]}")
+
+        self.save_persona(speaker_id)
 
     def get_all_personas(self) -> List[DigitalPersona]:
         """모든 페르소나 조회"""
