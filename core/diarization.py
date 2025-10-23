@@ -45,6 +45,10 @@ class DiarizationWorker(QObject):
 
     def stop(self):
         self._stop.set()
+        # 스레드가 종료될 때까지 대기 (최대 5초)
+        if self._thr and self._thr.is_alive():
+            self._thr.join(timeout=5.0)
+        self.sig_status.emit("Diarization stopped.")
 
     def _loop(self):
         # Pipeline 로드 (한 번만)

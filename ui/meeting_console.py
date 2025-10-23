@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 # ui/meeting_console.py
-import os, datetime, json, time
-from PySide6.QtCore import Qt, QTimer, Signal, QDateTime
+import os, datetime, json, time, re, uuid
+from typing import List, Dict, Any
+from pathlib import Path
+from PySide6.QtCore import Qt, QTimer, Signal, QDateTime, QDate, QRect, QObject, QEvent
+from PySide6.QtGui import QPainter, QFont, QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QListWidget,
     QListWidgetItem, QPlainTextEdit, QLabel, QTabWidget, QSplitter, QComboBox,
     QCheckBox, QFormLayout, QLineEdit, QMessageBox, QDialog, QDialogButtonBox,
-    QDateTimeEdit, QTextEdit, QDockWidget, QCalendarWidget, QDateEdit,
+    QDateTimeEdit, QTextEdit, QDockWidget, QCalendarWidget, QDateEdit, QScrollArea,
 )
 
 from ui.survey_wizard import PersonaSurveyWizard
@@ -19,6 +22,7 @@ from core.diarization import DiarizationWorker
 from core.summarizer import (
     render_summary_html_from_segments, actions_from_segments,
     render_actions_table_html, extract_agenda, llm_summarize,
+    extract_schedules_from_summary,
 )
 from core.rag_store import RagStore
 from core.adapter import AdapterManager
@@ -29,13 +33,428 @@ from core.voice_store import VoiceStore
 import numpy as np
 from core.schedule_store import Schedule as JSONSchedule, save_schedule as json_save, list_month as json_list_month, new_id as json_new_id
 
+# 스케줄 JSON 경로 (삭제/업데이트에 사용)
+SCHEDULE_JSON_PATH = Path("schedules.json")
 
 THEME = {
     "bg": "#e6f5e6", "pane": "#99cc99", "light_bg": "#fafffa",
     "btn": "#ffe066", "btn_hover": "#ffdb4d", "btn_border": "#cccc99",
+    "btn_ok": "#66cc66", "btn_danger": "#ff6666",
 }
 HF_TOKEN_ENV = "HF_TOKEN"
 DEFAULT_MODEL = "medium"
+
+
+class EmojiCalendar(QCalendarWidget):
+    """이모지 마크를 표시할 수 있는 캘린더 (디자인 유지, 덧그리기만)"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._emoji_marks = {}  # Dict[QDate, str]
+
+    def set_emoji_marks(self, marks: dict):
+        """날짜별 이모지 마크 설정"""
+        self._emoji_marks = marks
+        # QCalendarWidget 전체를 다시 그리도록 요청
+        self.updateCells()
+
+    def paintCell(self, painter: QPainter, rect: QRect, date: QDate):
+        """각 날짜 셀을 그릴 때 이모지 추가"""
+        super().paintCell(painter, rect, date)
+        if date in self._emoji_marks:
+            painter.save()
+            font = painter.font()
+            font.setPointSize(font.pointSize() + 2)
+            painter.setFont(font)
+            painter.drawText(
+                rect.adjusted(2, 0, 0, 0),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+                self._emoji_marks[date]
+            )
+            painter.restore()
+
+
+class ScheduleSelectionDialog(QDialog):
+    """추출된 일정을 선택하여 달력에 추가하는 대화상자"""
+
+    def __init__(self, schedules: List[Dict], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("회의에서 일정 추출")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
+
+        self.schedules = schedules
+        self.selected_schedules = []
+
+        layout = QVBoxLayout(self)
+
+        # 설명 라벨
+        info_label = QLabel(f"🎯 회의 요약에서 {len(schedules)}개의 일정을 발견했습니다.\n추가할 일정을 선택하세요:")
+        info_label.setStyleSheet("font-weight: bold; padding: 10px;")
+        layout.addWidget(info_label)
+
+        # 일정 목록 (체크박스)
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {THEME['light_bg']};
+                border: 1px solid {THEME['btn_border']};
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 12pt;
+            }}
+            QListWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid #ddd;
+            }}
+            QListWidget::item:hover {{
+                background-color: {THEME['pane']};
+            }}
+        """)
+
+        for idx, sch in enumerate(schedules):
+            title = sch.get("title", "제목 없음")
+            date = sch.get("date", "날짜 없음")
+            time_str = sch.get("time")
+            sch_type = sch.get("type", "todo")
+            assignee = sch.get("assignee")
+            description = sch.get("description", "")
+
+            # 아이콘 선택
+            icon_map = {
+                "meeting": "🗓️",
+                "project": "📁",
+                "todo": "✅",
+                "deadline": "⏰"
+            }
+            icon = icon_map.get(sch_type, "📌")
+
+            # 표시 텍스트 구성
+            time_part = f" {time_str}" if time_str else ""
+            assignee_part = f" ({assignee})" if assignee else ""
+            desc_part = f"\n    → {description[:50]}" if description else ""
+
+            display_text = f"{icon} {date}{time_part} - {title}{assignee_part}{desc_part}"
+
+            item = QListWidgetItem(display_text)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)  # 기본값: 모두 선택
+            item.setData(Qt.ItemDataRole.UserRole, idx)  # 인덱스 저장
+            self.list_widget.addItem(item)
+
+        layout.addWidget(self.list_widget)
+
+        # 전체 선택/해제 버튼
+        select_btns = QHBoxLayout()
+        btn_select_all = QPushButton("✅ 전체 선택")
+        btn_deselect_all = QPushButton("⬜ 전체 해제")
+        btn_select_all.clicked.connect(self._select_all)
+        btn_deselect_all.clicked.connect(self._deselect_all)
+        select_btns.addWidget(btn_select_all)
+        select_btns.addWidget(btn_deselect_all)
+        select_btns.addStretch()
+        layout.addLayout(select_btns)
+
+        # 확인/취소 버튼
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self._on_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _select_all(self):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            item.setCheckState(Qt.CheckState.Checked)
+
+    def _deselect_all(self):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            item.setCheckState(Qt.CheckState.Unchecked)
+
+    def _on_accept(self):
+        """선택된 일정만 추출"""
+        self.selected_schedules = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                idx = item.data(Qt.ItemDataRole.UserRole)
+                self.selected_schedules.append(self.schedules[idx])
+        self.accept()
+
+    def get_selected_schedules(self):
+        """선택된 일정 반환"""
+        return self.selected_schedules
+
+
+class _ScheduleListDialog(QDialog):
+    """특정 날짜의 일정 목록을 보여주는 대화상자"""
+
+    def __init__(self, date: QDate, schedules: List[Dict], parent=None):
+        super().__init__(parent)
+        self.date = date
+        self.schedules = schedules
+        self.selected_schedule = None
+
+        self.setWindowTitle(f"일정 목록 - {date.toString('yyyy년 MM월 dd일')}")
+        self.setMinimumSize(500, 400)
+
+        layout = QVBoxLayout(self)
+
+        # 헤더
+        header = QLabel(f"📅 {date.toString('yyyy년 MM월 dd일')} 일정 ({len(schedules)}개)")
+        header.setStyleSheet("font-size: 14pt; font-weight: bold; padding: 10px;")
+        layout.addWidget(header)
+
+        # 일정 목록
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {THEME['light_bg']};
+                border: 1px solid {THEME['btn_border']};
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 12pt;
+            }}
+            QListWidget::item {{
+                padding: 10px;
+                border-bottom: 1px solid #ddd;
+            }}
+            QListWidget::item:hover {{
+                background-color: {THEME['pane']};
+            }}
+        """)
+        self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
+
+        for sch in schedules:
+            title = sch.get("title", "제목 없음")
+            meeting_start = sch.get("meeting_start", "")
+            location = sch.get("location", "")
+
+            # 시간 추출
+            time_str = ""
+            if meeting_start:
+                try:
+                    dt = datetime.fromisoformat(meeting_start)
+                    time_str = dt.strftime("%H:%M")
+                except:
+                    pass
+
+            # 표시 텍스트
+            display_text = f"🕐 {time_str} - {title}" if time_str else f"📌 {title}"
+            if location:
+                display_text += f"\n    📍 {location}"
+
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.ItemDataRole.UserRole, sch)
+            self.list_widget.addItem(item)
+
+        layout.addWidget(self.list_widget)
+
+        # 버튼
+        btn_layout = QHBoxLayout()
+        btn_view = QPushButton("📄 상세보기")
+        btn_close = QPushButton("닫기")
+        btn_view.clicked.connect(self._on_view_clicked)
+        btn_close.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_view)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_close)
+        layout.addLayout(btn_layout)
+
+    def _on_item_double_clicked(self, item):
+        """항목 더블클릭시 상세보기"""
+        self.selected_schedule = item.data(Qt.ItemDataRole.UserRole)
+        self.accept()
+
+    def _on_view_clicked(self):
+        """상세보기 버튼 클릭"""
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            self.selected_schedule = current_item.data(Qt.ItemDataRole.UserRole)
+            self.accept()
+
+    def get_selected_schedule(self):
+        """선택된 일정 반환"""
+        return self.selected_schedule
+
+
+class _ScheduleDetailDialog(QDialog):
+    """일정 상세보기 및 수정/삭제 대화상자"""
+
+    def __init__(self, schedule: Dict, parent=None):
+        super().__init__(parent)
+        self.schedule = schedule
+        self.action = None  # "save", "delete", or None
+
+        self.setWindowTitle("일정 상세")
+        self.setMinimumSize(600, 500)
+
+        layout = QVBoxLayout(self)
+
+        # 제목
+        title_label = QLabel(f"📋 {schedule.get('title', '제목 없음')}")
+        title_label.setStyleSheet("font-size: 16pt; font-weight: bold; padding: 10px;")
+        layout.addWidget(title_label)
+
+        # 스크롤 영역
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"background-color: {THEME['light_bg']}; border: 1px solid {THEME['btn_border']}; border-radius: 4px;")
+
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+
+        # 필드들
+        self.edit_title = QLineEdit(schedule.get("title", ""))
+        self.edit_location = QLineEdit(schedule.get("location", ""))
+
+        # 회의 시작/종료
+        meeting_start = schedule.get("meeting_start", "")
+        meeting_end = schedule.get("meeting_end", "")
+
+        self.dt_start = QDateTimeEdit()
+        self.dt_end = QDateTimeEdit()
+
+        if meeting_start:
+            try:
+                dt = datetime.fromisoformat(meeting_start)
+                self.dt_start.setDateTime(QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute))
+            except:
+                self.dt_start.setDateTime(QDateTime.currentDateTime())
+        else:
+            self.dt_start.setDateTime(QDateTime.currentDateTime())
+
+        if meeting_end:
+            try:
+                dt = datetime.fromisoformat(meeting_end)
+                self.dt_end.setDateTime(QDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute))
+            except:
+                self.dt_end.setDateTime(QDateTime.currentDateTime().addSecs(3600))
+        else:
+            self.dt_end.setDateTime(QDateTime.currentDateTime().addSecs(3600))
+
+        # 프로젝트 날짜
+        self.d_project_start = QDateEdit()
+        self.d_project_due = QDateEdit()
+        self.d_settlement = QDateEdit()
+
+        project_start = schedule.get("project_start", "")
+        if project_start:
+            try:
+                y, m, d = map(int, project_start.split("-"))
+                self.d_project_start.setDate(QDate(y, m, d))
+            except:
+                self.d_project_start.setDate(QDate.currentDate())
+        else:
+            self.d_project_start.setDate(QDate.currentDate())
+
+        project_due = schedule.get("project_due", "")
+        if project_due:
+            try:
+                y, m, d = map(int, project_due.split("-"))
+                self.d_project_due.setDate(QDate(y, m, d))
+            except:
+                self.d_project_due.setDate(QDate.currentDate())
+        else:
+            self.d_project_due.setDate(QDate.currentDate())
+
+        settlement = schedule.get("settlement_at", "")
+        if settlement:
+            try:
+                y, m, d = map(int, settlement.split("-"))
+                self.d_settlement.setDate(QDate(y, m, d))
+            except:
+                self.d_settlement.setDate(QDate.currentDate())
+        else:
+            self.d_settlement.setDate(QDate.currentDate())
+
+        # TODOs
+        self.list_todo = QListWidget()
+        todos = schedule.get("todos", []) or []
+        for todo in todos:
+            self.list_todo.addItem(todo)
+
+        # 폼 레이아웃
+        form = QFormLayout()
+        form.addRow("제목:", self.edit_title)
+        form.addRow("장소:", self.edit_location)
+        form.addRow("회의 시작:", self.dt_start)
+        form.addRow("회의 종료:", self.dt_end)
+        form.addRow("프로젝트 시작:", self.d_project_start)
+        form.addRow("프로젝트 마감:", self.d_project_due)
+        form.addRow("결제일:", self.d_settlement)
+        form.addRow("To-Do 목록:", self.list_todo)
+
+        content_layout.addLayout(form)
+        scroll.setWidget(content_widget)
+        layout.addWidget(scroll)
+
+        # 버튼
+        btn_layout = QHBoxLayout()
+        btn_save = QPushButton("💾 저장")
+        btn_delete = QPushButton("🗑️ 삭제")
+        btn_cancel = QPushButton("취소")
+
+        btn_save.setStyleSheet(f"background-color: {THEME['btn_ok']}; color: white; font-weight: bold; padding: 8px;")
+        btn_delete.setStyleSheet(f"background-color: {THEME['btn_danger']}; color: white; font-weight: bold; padding: 8px;")
+
+        btn_save.clicked.connect(self._on_save)
+        btn_delete.clicked.connect(self._on_delete)
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_delete)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+
+    def _on_save(self):
+        """저장 버튼"""
+        self.action = "save"
+
+        # 수정된 값 반영
+        self.schedule["title"] = self.edit_title.text()
+        self.schedule["location"] = self.edit_location.text()
+        self.schedule["meeting_start"] = self.dt_start.dateTime().toString("yyyy-MM-ddTHH:mm:ss")
+        self.schedule["meeting_end"] = self.dt_end.dateTime().toString("yyyy-MM-ddTHH:mm:ss")
+        self.schedule["project_start"] = self.d_project_start.date().toString("yyyy-MM-dd")
+        self.schedule["project_due"] = self.d_project_due.date().toString("yyyy-MM-dd")
+        self.schedule["settlement_at"] = self.d_settlement.date().toString("yyyy-MM-dd")
+
+        todos = [self.list_todo.item(i).text() for i in range(self.list_todo.count())]
+        self.schedule["todos"] = todos
+
+        self.accept()
+
+    def _on_delete(self):
+        """삭제 버튼"""
+        reply = QMessageBox.question(
+            self,
+            "일정 삭제",
+            f"정말로 '{self.schedule.get('title', '이 일정')}'을(를) 삭제하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.action = "delete"
+            self.accept()
+
+    def get_action(self):
+        """사용자가 선택한 동작 반환"""
+        return self.action
+
+    def get_schedule(self):
+        """수정된 일정 반환"""
+        return self.schedule
+
+
+def asdict_schedule(s) -> Dict[str, Any]:
+    """Schedule 객체를 dict로 변환하는 헬퍼 함수"""
+    if isinstance(s, dict):
+        return s
+    from dataclasses import asdict
+    return asdict(s)
 
 
 class MeetingConsole(QMainWindow):
@@ -124,6 +543,10 @@ class MeetingConsole(QMainWindow):
         self._calendar_cache = {}  # {day: [items]}  로딩 캐시
         self._reload_calendar()    # 현재 연/월 일정 로드 및 표시
 
+        # EmojiCalendar 기능 활성화
+        self._promote_calendar_to_emoji()
+        self._refresh_calendar_emoji_marks()
+
     def _current_schedule_payload(self) -> dict:
         # ISO 문자열로 변환
         s = self.dt_start.dateTime().toString("yyyy-MM-dd HH:mm").replace(" ", "T") + ":00"
@@ -155,6 +578,8 @@ class MeetingConsole(QMainWindow):
         json_save(row)  # ← 파일 schedules.json에 원자적으로 저장
         # 저장 후 현재 달 다시 로드
         self._reload_calendar()
+        # 일정 목록도 업데이트
+        self._update_schedule_list()
 
     def _reload_calendar(self):
         try:
@@ -165,23 +590,37 @@ class MeetingConsole(QMainWindow):
             d = self.dt_start.date()
             y, m = d.year(), d.month()
         self._calendar_cache = json_list_month(y, m)  # {day : [items]}
-        # 날짜별 툴팁 표시(디자인 안 바꾸고 가볍게 정보만)
-        from PySide6.QtGui import QTextCharFormat
-        fmt_default = QTextCharFormat()
-        self.calendar.setDateTextFormat(self.calendar.selectedDate(), fmt_default)  # 리셋용
 
-        # 간단 툴팁: 같은 달의 각 날짜 셀에 일정 요약
-        for day, items in self._calendar_cache.items():
-            date_obj = self.calendar.selectedDate()
-            qdate = date_obj  # 임시
-            qdate.setDate(int(self.cmb_year.currentText()), int(self.cmb_month.currentText()), day)
-            tips = []
-            for it in items:
-                t = it.get("title", "-")
-                st = it.get("meeting_start", "")[11:16]  # HH:MM
-                tips.append(f"{st} {t}")
-            self.calendar.setDateTextFormat(qdate, QTextCharFormat())  # 형식은 유지
-            self.calendar.setToolTip("\n".join(tips) if tips else "")
+        # 날짜별 강조 표시 및 툴팁
+        from PySide6.QtGui import QTextCharFormat, QColor
+        from PySide6.QtCore import QDate
+
+        # 모든 날짜 형식 초기화
+        fmt_default = QTextCharFormat()
+
+        # 일정이 있는 날짜 강조
+        fmt_highlight = QTextCharFormat()
+        fmt_highlight.setBackground(QColor("#ffe066"))  # 노란색 배경
+        fmt_highlight.setFontWeight(700)  # 볼드체
+
+        # 해당 월의 모든 날짜에 대해 처리
+        for day in range(1, 32):
+            try:
+                qdate = QDate(y, m, day)
+                if not qdate.isValid():
+                    continue
+
+                if day in self._calendar_cache and self._calendar_cache[day]:
+                    # 일정이 있는 날: 강조 표시
+                    self.calendar.setDateTextFormat(qdate, fmt_highlight)
+                else:
+                    # 일정이 없는 날: 기본 형식
+                    self.calendar.setDateTextFormat(qdate, fmt_default)
+            except Exception:
+                pass
+
+        # EmojiCalendar 이모지 마크도 업데이트
+        self._refresh_calendar_emoji_marks()
 
 
     def _compose_schedule_doc(self) -> str:
@@ -323,8 +762,8 @@ class MeetingConsole(QMainWindow):
         header.addStretch(1)
         L.addLayout(header)
 
-        # Big calendar
-        self.calendar = QCalendarWidget()
+        # Big calendar (with emoji marks)
+        self.calendar = EmojiCalendar()
         self.calendar.setGridVisible(True)
         self.calendar.setStyleSheet(f"""
             QCalendarWidget QToolButton {{
@@ -343,6 +782,34 @@ class MeetingConsole(QMainWindow):
             }}
         """)
         L.addWidget(self.calendar, stretch=1)
+
+        # 선택된 날짜의 일정 목록
+        L.addWidget(QLabel("📅 선택된 날짜의 일정:"))
+        self.list_schedules = QListWidget()
+        self.list_schedules.setMaximumHeight(150)
+        self.list_schedules.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {THEME['light_bg']};
+                border: 1px solid {THEME['btn_border']};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            QListWidget::item:selected {{
+                background-color: {THEME['pane']};
+                color: #000;
+            }}
+        """)
+        L.addWidget(self.list_schedules)
+
+        # 일정 관리 버튼
+        schedule_btns = QHBoxLayout()
+        self.btn_load_schedule = QPushButton("📝 수정")
+        self.btn_delete_schedule = QPushButton("🗑️ 삭제")
+        self.btn_new_schedule = QPushButton("➕ 새 일정")
+        schedule_btns.addWidget(self.btn_load_schedule)
+        schedule_btns.addWidget(self.btn_delete_schedule)
+        schedule_btns.addWidget(self.btn_new_schedule)
+        L.addLayout(schedule_btns)
 
         # Form: 회의/프로젝트/장소 등
         form = QFormLayout()
@@ -450,6 +917,11 @@ class MeetingConsole(QMainWindow):
         # todo
         self.btn_todo_add.clicked.connect(self._on_todo_add)
         self.btn_todo_del.clicked.connect(self._on_todo_del)
+
+        # 일정 관리 버튼
+        self.btn_load_schedule.clicked.connect(self._on_load_schedule)
+        self.btn_delete_schedule.clicked.connect(self._on_delete_schedule)
+        self.btn_new_schedule.clicked.connect(self._on_new_schedule)
 
         # 초기 달력/콤보 동기화
         d = self.dt_start.date()
@@ -600,6 +1072,13 @@ class MeetingConsole(QMainWindow):
 
         # RAG에 요약과 실시간 세그먼트 저장
         self._save_summary_to_rag(summary_text, items, self.state.live_segments)
+
+        # 🆕 LLM으로 일정 추출 시도
+        extracted_schedules = extract_schedules_from_summary(summary_text, self.state.live_segments)
+
+        if extracted_schedules:
+            self._prompt_add_schedules_to_calendar(extracted_schedules)
+
         QMessageBox.information(self, "Done", "AI 요약 및 액션 아이템 생성 완료\n요약 문서가 RAG에 저장되었습니다.")
 
     def _save_summary_to_rag(self, summary_text: str, action_items: list, segments=None):
@@ -702,7 +1181,7 @@ class MeetingConsole(QMainWindow):
             pass
 
     def _on_calendar_selected(self):
-        """달력에서 날짜 선택 → 시작/종료 날짜의 '날짜'만 바꾸고 시간은 유지"""
+        """달력에서 날짜 선택 → 시작/종료 날짜의 '날짜'만 바꾸고 시간은 유지 + 일정 목록 표시"""
         d = self.calendar.selectedDate()
         start = self.dt_start.dateTime()
         end = self.dt_end.dateTime()
@@ -711,6 +1190,9 @@ class MeetingConsole(QMainWindow):
         # 프로젝트 시작 기본값도 동기
         if not self.edit_title.text().strip():
             self.d_project_start.setDate(d)
+
+        # 선택된 날짜의 일정 목록 표시
+        self._update_schedule_list()
         self._refresh_schedule_preview()
 
     def _on_todo_add(self):
@@ -725,6 +1207,380 @@ class MeetingConsole(QMainWindow):
         for it in self.list_todo.selectedItems():
             self.list_todo.takeItem(self.list_todo.row(it))
         self._refresh_schedule_preview()
+
+    def _update_schedule_list(self):
+        """선택된 날짜의 일정 목록 업데이트"""
+        self.list_schedules.clear()
+        d = self.calendar.selectedDate()
+        date_str = d.toString("yyyy-MM-dd")
+
+        # 해당 날짜의 일정 가져오기
+        from core.schedule_store import list_day
+        schedules = list_day(date_str)
+
+        if not schedules:
+            return
+
+        for sch in schedules:
+            schedule_id = sch.get("id")
+            title = sch.get("title", "제목 없음")
+            meeting_start = sch.get("meeting_start", "")
+            time_str = meeting_start[11:16] if len(meeting_start) > 11 else ""
+
+            # TODO 개수 표시
+            todos = sch.get("todos", [])
+            todo_count = len(todos) if todos else 0
+            todo_str = f" [TODO: {todo_count}]" if todo_count > 0 else ""
+
+            display_text = f"{time_str} {title}{todo_str}"
+
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.ItemDataRole.UserRole, schedule_id)  # ID 저장
+            self.list_schedules.addItem(item)
+
+    def _on_load_schedule(self):
+        """선택된 일정을 폼에 로드하여 수정"""
+        current_item = self.list_schedules.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "일정 선택", "수정할 일정을 먼저 선택해주세요.")
+            return
+
+        schedule_id = current_item.data(Qt.ItemDataRole.UserRole)
+        from core.schedule_store import get_by_id
+        sch = get_by_id(schedule_id)
+
+        if not sch:
+            QMessageBox.warning(self, "오류", "일정을 찾을 수 없습니다.")
+            return
+
+        # 폼에 데이터 로드
+        self.edit_title.setText(sch.get("title", ""))
+        self.edit_location.setText(sch.get("location", ""))
+
+        # 날짜/시간 파싱
+        meeting_start = sch.get("meeting_start", "")
+        meeting_end = sch.get("meeting_end", "")
+
+        if meeting_start:
+            dt_start = QDateTime.fromString(meeting_start, "yyyy-MM-ddTHH:mm:ss")
+            if dt_start.isValid():
+                self.dt_start.setDateTime(dt_start)
+
+        if meeting_end:
+            dt_end = QDateTime.fromString(meeting_end, "yyyy-MM-ddTHH:mm:ss")
+            if dt_end.isValid():
+                self.dt_end.setDateTime(dt_end)
+
+        # 프로젝트 날짜
+        if sch.get("project_start"):
+            pj_start = QDate.fromString(sch.get("project_start"), "yyyy-MM-dd")
+            if pj_start.isValid():
+                self.d_project_start.setDate(pj_start)
+
+        if sch.get("project_due"):
+            pj_due = QDate.fromString(sch.get("project_due"), "yyyy-MM-dd")
+            if pj_due.isValid():
+                self.d_project_due.setDate(pj_due)
+
+        if sch.get("settlement_at"):
+            settlement = QDate.fromString(sch.get("settlement_at"), "yyyy-MM-dd")
+            if settlement.isValid():
+                self.d_payment_due.setDate(settlement)
+
+        # TODO 리스트 로드
+        self.list_todo.clear()
+        todos = sch.get("todos", [])
+        if todos:
+            for todo in todos:
+                self.list_todo.addItem(todo)
+
+        self._refresh_schedule_preview()
+        QMessageBox.information(self, "로드 완료", f"'{sch.get('title')}'을(를) 수정할 수 있습니다.\n저장 버튼을 눌러 업데이트하세요.")
+
+    def _on_delete_schedule(self):
+        """선택된 일정 삭제"""
+        current_item = self.list_schedules.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "일정 선택", "삭제할 일정을 먼저 선택해주세요.")
+            return
+
+        schedule_id = current_item.data(Qt.ItemDataRole.UserRole)
+        from core.schedule_store import get_by_id, delete_schedule
+
+        sch = get_by_id(schedule_id)
+        if not sch:
+            QMessageBox.warning(self, "오류", "일정을 찾을 수 없습니다.")
+            return
+
+        # 확인 대화상자
+        reply = QMessageBox.question(
+            self,
+            "일정 삭제",
+            f"'{sch.get('title')}'을(를) 삭제하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            delete_schedule(schedule_id)
+            self._reload_calendar()
+            self._update_schedule_list()
+            QMessageBox.information(self, "삭제 완료", "일정이 삭제되었습니다.")
+
+    def _on_new_schedule(self):
+        """새 일정 입력 모드 (폼 초기화)"""
+        self.edit_title.clear()
+        self.edit_location.clear()
+        self.list_todo.clear()
+
+        # 현재 선택된 날짜로 기본값 설정
+        d = self.calendar.selectedDate()
+        today = QDateTime.currentDateTime()
+
+        self.dt_start.setDateTime(QDateTime(d, today.time()))
+        self.dt_end.setDateTime(QDateTime(d, today.addSecs(3600).time()))
+        self.d_project_start.setDate(d)
+        self.d_project_due.setDate(d.addDays(30))
+        self.d_payment_due.setDate(d.addDays(14))
+
+        self._refresh_schedule_preview()
+        QMessageBox.information(self, "새 일정", "새 일정을 입력하세요.")
+
+    def _promote_calendar_to_emoji(self):
+        """EmojiCalendar에 더블클릭 이벤트 필터 설치"""
+        class DoubleClickFilter(QObject):
+            def __init__(self, parent_console):
+                super().__init__()
+                self.parent_console = parent_console
+
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Type.MouseButtonDblClick:
+                    # 더블클릭한 날짜 가져오기
+                    date = self.parent_console.calendar.selectedDate()
+                    self.parent_console._open_schedule_list_dialog_for(date)
+                    return True
+                return super().eventFilter(obj, event)
+
+        self._double_click_filter = DoubleClickFilter(self)
+
+        # QCalendarWidget의 내부 QTableView 찾기
+        from PySide6.QtWidgets import QTableView
+        table_view = self.calendar.findChild(QTableView)
+        if table_view:
+            table_view.viewport().installEventFilter(self._double_click_filter)
+        else:
+            # QTableView를 못 찾으면 calendar 자체에 설치
+            self.calendar.installEventFilter(self._double_click_filter)
+
+    def _refresh_calendar_emoji_marks(self):
+        """현재 달력 캐시를 기반으로 이모지 마크 갱신"""
+        from PySide6.QtCore import QDate
+        marks = {}
+
+        try:
+            y = int(self.cmb_year.currentText())
+            m = int(self.cmb_month.currentText())
+        except:
+            d = self.dt_start.date()
+            y, m = d.year(), d.month()
+
+        # _calendar_cache: {day: [items]}
+        for day, items in self._calendar_cache.items():
+            if items:
+                qdate = QDate(y, m, day)
+                if qdate.isValid():
+                    # 일정 개수에 따라 이모지 선택
+                    count = len(items)
+                    if count == 1:
+                        marks[qdate] = "📌"
+                    elif count == 2:
+                        marks[qdate] = "📌📌"
+                    else:
+                        marks[qdate] = f"📌×{count}"
+
+        self.calendar.set_emoji_marks(marks)
+
+    def _open_schedule_list_dialog_for(self, date: QDate):
+        """특정 날짜의 일정 목록 대화상자 열기"""
+        date_str = date.toString("yyyy-MM-dd")
+        from core.schedule_store import list_day
+        schedules = list_day(date_str)
+
+        if not schedules:
+            QMessageBox.information(self, "일정 없음", f"{date.toString('yyyy년 MM월 dd일')}에는 등록된 일정이 없습니다.")
+            return
+
+        # 일정 목록 대화상자
+        dialog = _ScheduleListDialog(date, schedules, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_schedule = dialog.get_selected_schedule()
+            if selected_schedule:
+                self._edit_schedule_dialog(selected_schedule)
+
+    def _edit_schedule_dialog(self, schedule: Dict):
+        """일정 상세보기 및 수정/삭제 대화상자"""
+        dialog = _ScheduleDetailDialog(schedule, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            action = dialog.get_action()
+            updated_schedule = dialog.get_schedule()
+
+            if action == "save":
+                self._upsert_schedule_item(updated_schedule)
+                self._save_specific_schedule_to_rag(updated_schedule)
+                QMessageBox.information(self, "저장 완료", "일정이 업데이트되었습니다.")
+            elif action == "delete":
+                self._delete_schedule_by_id(updated_schedule.get("id"))
+                QMessageBox.information(self, "삭제 완료", "일정이 삭제되었습니다.")
+
+            # 달력 갱신
+            self._reload_calendar()
+            self._refresh_calendar_emoji_marks()
+            self._update_schedule_list()
+
+    def _save_specific_schedule_to_rag(self, schedule: Dict):
+        """특정 스케줄을 RAG에 저장"""
+        if not (self.rag and self.rag.ok):
+            return
+        from core.audio import Segment
+
+        # 문서 생성
+        title = schedule.get("title", "제목 없음")
+        meeting_start = schedule.get("meeting_start", "")
+        meeting_end = schedule.get("meeting_end", "")
+        location = schedule.get("location", "") or "-"
+        project_start = schedule.get("project_start", "")
+        project_due = schedule.get("project_due", "")
+        settlement = schedule.get("settlement_at", "")
+        todos = schedule.get("todos", []) or []
+
+        todo_block = "\n".join([f"- {t}" for t in todos]) if todos else "- (없음)"
+
+        doc = (
+            "[SCHEDULE DOC]\n"
+            f"type: schedule\n"
+            f"title: {title}\n"
+            f"when: {meeting_start} ~ {meeting_end}\n"
+            f"where: {location}\n"
+            f"project_start: {project_start}\n"
+            f"project_due: {project_due}\n"
+            f"settlement_due: {settlement}\n"
+            f"todos:\n{todo_block}\n"
+        )
+
+        seg = Segment(
+            text=doc,
+            start=0.0,
+            end=0.0,
+            speaker_name="SCHEDULE"
+        )
+
+        doc_id = f"schedule_{schedule.get('id', uuid.uuid4())}"
+        self.rag.add_segments([seg], doc_id=doc_id)
+        print(f"[INFO] Schedule saved to RAG: {doc_id}")
+
+    def _upsert_schedule_item(self, schedule: Dict):
+        """일정 업데이트 (schedule_store.py 사용)"""
+        from core.schedule_store import save_schedule
+
+        sch = JSONSchedule(
+            id=schedule.get("id"),
+            title=schedule.get("title", ""),
+            location=schedule.get("location"),
+            meeting_start=schedule.get("meeting_start", ""),
+            meeting_end=schedule.get("meeting_end", ""),
+            project_start=schedule.get("project_start"),
+            project_due=schedule.get("project_due"),
+            settlement_at=schedule.get("settlement_at"),
+            todos=schedule.get("todos", [])
+        )
+        save_schedule(sch)
+
+    def _delete_schedule_by_id(self, schedule_id: int):
+        """ID로 일정 삭제"""
+        from core.schedule_store import delete_schedule
+        delete_schedule(schedule_id)
+
+        # RAG에서도 삭제
+        if self.rag and self.rag.ok:
+            doc_id = f"schedule_{schedule_id}"
+            # Qdrant는 delete_by_id 미지원이므로 필터링으로 삭제 (또는 직접 구현 필요)
+            # 여기서는 로그만 남김
+            print(f"[INFO] Schedule deleted from store: {doc_id}")
+
+    def _prompt_add_schedules_to_calendar(self, schedules: List[Dict]):
+        """추출된 일정을 사용자에게 확인받고 달력에 추가"""
+        # 대화상자 표시
+        dialog = ScheduleSelectionDialog(schedules, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        selected = dialog.get_selected_schedules()
+        if not selected:
+            return
+
+        # 선택된 일정을 달력에 추가
+        added_count = 0
+        for sch in selected:
+            try:
+                # Schedule 객체 생성
+                title = sch.get("title", "제목 없음")
+                date_str = sch.get("date")
+                time_str = sch.get("time")
+                description = sch.get("description", "")
+                assignee = sch.get("assignee")
+
+                # 시간 처리 (없으면 기본값 09:00 ~ 10:00)
+                if time_str:
+                    meeting_start = f"{date_str}T{time_str}:00"
+                    # 종료 시간은 1시간 후
+                    start_dt = datetime.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                    end_dt = start_dt + datetime.timedelta(hours=1)
+                    meeting_end = end_dt.strftime("%Y-%m-%dT%H:%M:00")
+                else:
+                    meeting_start = f"{date_str}T09:00:00"
+                    meeting_end = f"{date_str}T10:00:00"
+
+                # 담당자를 장소나 설명에 추가
+                location = None
+                if assignee:
+                    location = f"담당: {assignee}"
+                    if description:
+                        description = f"[{assignee}] {description}"
+
+                # TODO 리스트 (description을 TODO로 변환)
+                todos = []
+                if description:
+                    todos = [description]
+
+                # 스케줄 저장
+                schedule = JSONSchedule(
+                    id=json_new_id(),
+                    title=title,
+                    location=location,
+                    meeting_start=meeting_start,
+                    meeting_end=meeting_end,
+                    project_start=date_str,
+                    project_due=date_str,
+                    settlement_at=None,
+                    todos=todos
+                )
+
+                json_save(schedule)
+                added_count += 1
+
+            except Exception as e:
+                print(f"[ERROR] 일정 저장 실패: {e}")
+                continue
+
+        # 달력 갱신
+        if added_count > 0:
+            self._reload_calendar()
+            self._update_schedule_list()
+            QMessageBox.information(
+                self,
+                "일정 추가 완료",
+                f"{added_count}개의 일정이 달력에 추가되었습니다."
+            )
 
     def _refresh_schedule_preview(self):
         """우측 Schedule Memo 영역 자동 갱신"""

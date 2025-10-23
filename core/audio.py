@@ -98,6 +98,7 @@ class AudioWorker(QObject):
         self._buf_lock = threading.Lock()
         self._frames_elapsed = 0
         self.model = None
+        self._chunk_thread = None  # _chunk_loop 스레드 참조
 
         # ▼ 추가: 선택된 입력 디바이스 인덱스 (None이면 기본장치)
         self._input_device_index: Optional[int] = None
@@ -585,7 +586,8 @@ class AudioWorker(QObject):
         else:
             self._start_sounddevice()
 
-        threading.Thread(target=self._chunk_loop, daemon=True).start()
+        self._chunk_thread = threading.Thread(target=self._chunk_loop, daemon=True)
+        self._chunk_thread.start()
         self.sig_status.emit(f"Audio capture started ({AUDIO_BACKEND}).")
 
     def _start_pyaudio(self):
@@ -638,24 +640,41 @@ class AudioWorker(QObject):
 
     def stop(self):
         self._stop.set()
+
+        # 1. 오디오 스트림 중지
         try:
             if AUDIO_BACKEND == "pyaudio":
                 if self.stream:
-                    # self.stream.stop_stream()
+                    self.stream.stop_stream()
                     self.stream.close()
                 if self.audio:
                     self.audio.terminate()
             else:
                 if self.stream:
-                    # self.stream.stop()
+                    self.stream.stop()
                     self.stream.close()
-        except Exception:
-            pass
+        except Exception as e:
+            self.sig_status.emit(f"Audio stop warning: {e}")
+
+        # 2. _chunk_loop 스레드 종료 대기 (최대 3초)
+        if self._chunk_thread and self._chunk_thread.is_alive():
+            self._chunk_thread.join(timeout=3.0)
+            if self._chunk_thread.is_alive():
+                self.sig_status.emit("Warning: chunk thread did not stop in time")
+
+        # 3. 스트림과 오디오 객체 명시적으로 None 설정
+        self.stream = None
+        self.audio = None
+        self._chunk_thread = None
         self.sig_status.emit("Audio capture stopped.")
 
     # ====== Audio callback / buffering ======
     def _on_audio_pyaudio(self, in_data, frame_count, time_info, status):
         """PyAudio 콜백"""
+        # 종료 플래그 체크
+        if self._stop.is_set():
+            return (None, pyaudio.paComplete)
+
         # 오디오 데이터를 numpy 배열로 변환
         data_np = np.frombuffer(in_data, dtype=np.int16).astype(np.float32) / 32768.0
         data_np = data_np.reshape(-1, CHANNELS) if CHANNELS == 1 else data_np
@@ -665,12 +684,20 @@ class AudioWorker(QObject):
 
     def _on_audio_sounddevice(self, indata, frame_count):
         """sounddevice 콜백"""
+        # 종료 플래그 체크
+        if self._stop.is_set():
+            raise sd.CallbackStop()
+
         # indata는 이미 float32 numpy array
         data_np = indata.reshape(-1, CHANNELS) if CHANNELS == 1 else indata
         self._process_audio_data(data_np, frame_count)
 
     def _process_audio_data(self, data_np: np.ndarray, frame_count: int):
         """공통 오디오 데이터 처리"""
+        # 종료 플래그 체크 (빠른 종료)
+        if self._stop.is_set():
+            return
+
         # 버퍼 누적 (PyAudio용 - sounddevice는 바이트가 아닌 float)
         if AUDIO_BACKEND == "pyaudio":
             # int16 -> bytes 변환

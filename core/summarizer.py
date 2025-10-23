@@ -504,3 +504,137 @@ def get_speaker_context_summary(
 
     except Exception as e:
         return {"error": f"화자 분석 중 오류: {str(e)}"}
+
+
+def extract_schedules_from_summary(
+    summary_text: str,
+    segments: List[Segment],
+    backend: Optional[str] = None
+) -> List[Dict]:
+    """
+    LLM을 사용하여 회의 요약에서 일정, 마감일, TODO를 추출
+
+    Args:
+        summary_text: 회의 요약 텍스트
+        segments: 원본 회의 세그먼트 (추가 컨텍스트용)
+        backend: LLM 백엔드 (예: "openai:gpt-4o-mini")
+
+    Returns:
+        List[Dict]: 추출된 일정 목록
+        [
+            {
+                "title": "API 개발 완료",
+                "date": "2025-01-20",
+                "time": "14:00",  # 선택적
+                "type": "project",  # "meeting", "project", "todo"
+                "description": "RESTful API 개발 및 문서화",
+                "assignee": "김개발"  # 선택적
+            },
+            ...
+        ]
+    """
+    if not summary_text:
+        return []
+
+    # 현재 날짜 정보
+    today = datetime.datetime.now()
+    current_date = today.strftime("%Y-%m-%d")
+    current_weekday = ["월", "화", "수", "목", "금", "토", "일"][today.weekday()]
+
+    # 프롬프트 구성
+    prompt = f"""당신은 회의록에서 일정과 할 일을 추출하는 전문가입니다.
+
+오늘 날짜: {current_date} ({current_weekday}요일)
+
+다음 회의 요약에서 **일정, 마감일, TODO**를 모두 찾아서 JSON 배열로 추출해주세요.
+
+회의 요약:
+{summary_text}
+
+추출 규칙:
+1. 명확한 날짜나 기한이 있는 항목만 추출
+2. "다음주 월요일", "내일", "이번주 금요일" 같은 상대 날짜는 구체적인 날짜로 변환
+3. 시간이 명시되어 있으면 포함, 없으면 null
+4. 담당자가 명시되어 있으면 포함, 없으면 null
+5. 타입은 다음 중 하나로 분류:
+   - "meeting": 회의, 미팅
+   - "project": 프로젝트, 개발, 작업
+   - "todo": 일반 할 일
+   - "deadline": 마감, 제출
+
+응답 형식 (JSON 배열만 출력, 다른 설명 없이):
+[
+  {{
+    "title": "작업 제목",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM" 또는 null,
+    "type": "meeting|project|todo|deadline",
+    "description": "상세 설명",
+    "assignee": "담당자 이름" 또는 null
+  }}
+]
+
+중요:
+- 반드시 유효한 JSON 배열만 출력하세요
+- 일정이 없으면 빈 배열 [] 을 반환하세요
+- 추측하지 말고 명확한 일정만 추출하세요"""
+
+    try:
+        if LLMRouter is None:
+            print("[WARN] LLMRouter를 사용할 수 없어 일정 추출을 건너뜁니다.")
+            return []
+
+        router = LLMRouter(default_backend=backend or "openai:gpt-4o-mini")
+        response = router.complete(backend, prompt, temperature=0.1)
+
+        # JSON 파싱 (응답에서 코드 블록 제거)
+        response = response.strip()
+        if response.startswith("```"):
+            # 코드 블록 제거
+            lines = response.split("\n")
+            response = "\n".join(lines[1:-1]) if len(lines) > 2 else response
+            response = response.replace("```json", "").replace("```", "").strip()
+
+        # JSON 파싱
+        import json
+        schedules = json.loads(response)
+
+        if not isinstance(schedules, list):
+            print(f"[WARN] LLM 응답이 리스트가 아닙니다: {type(schedules)}")
+            return []
+
+        # 유효성 검증
+        valid_schedules = []
+        for sch in schedules:
+            if not isinstance(sch, dict):
+                continue
+
+            # 필수 필드 확인
+            if "title" not in sch or "date" not in sch:
+                continue
+
+            # 날짜 형식 검증
+            try:
+                datetime.datetime.strptime(sch["date"], "%Y-%m-%d")
+            except ValueError:
+                print(f"[WARN] 잘못된 날짜 형식: {sch.get('date')}")
+                continue
+
+            # 타입 기본값
+            if "type" not in sch or sch["type"] not in ["meeting", "project", "todo", "deadline"]:
+                sch["type"] = "todo"
+
+            valid_schedules.append(sch)
+
+        print(f"[INFO] LLM이 {len(valid_schedules)}개의 일정을 추출했습니다.")
+        return valid_schedules
+
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] LLM 응답 JSON 파싱 실패: {e}")
+        print(f"[DEBUG] LLM 응답: {response[:500]}")
+        return []
+    except Exception as e:
+        print(f"[ERROR] 일정 추출 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
