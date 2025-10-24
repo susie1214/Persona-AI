@@ -44,6 +44,7 @@ from .llm_openai import OpenAILLM
 from .llm_ax import AXLLM
 from .llm_midm import MidmLLM
 from .llm_ollama import OllamaLLM
+from .llm_kanana import KananaLLM
 from .llm_placeholder import HttpLLM
 
 # 사용자 친화적 별칭 → 정식 모델 ID로 보정
@@ -51,6 +52,9 @@ ALIAS = {
     # Midm 별칭
     "midm-2.0-mini-instruct": "K-Intelligence/Midm-2.0-Mini-Instruct",
     "midm-mini": "K-Intelligence/Midm-2.0-Mini-Instruct",
+    # Kanana 별칭
+    "kanana-1.5-v-3b-instruct": "kakaocorp/kanana-1.5-v-3b-instruct",
+    "kanana": "kakaocorp/kanana-1.5-v-3b-instruct",
     # Ollama 예시
     "llama3": "llama3",
 }
@@ -84,6 +88,8 @@ class LLMRouter:
             return AXLLM(model)
         if prov == "midm":
             return MidmLLM(model)
+        if prov == "kanana":
+            return KananaLLM(model)
         if prov == "http":
             return HttpLLM(name, endpoint="http://localhost:8000/chat")
         # fallback

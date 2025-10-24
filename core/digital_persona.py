@@ -472,12 +472,25 @@ class DigitalPersonaManager:
         return list(self.personas.values())
 
     def delete_persona(self, speaker_id: str):
-        """페르소나 삭제"""
+        """페르소나 삭제 (QLoRA 어댑터도 함께 삭제)"""
+        import shutil
+
+        # 1. 페르소나 JSON 파일 삭제
         path = os.path.join(self.storage_path, f"{speaker_id}.json")
         if os.path.exists(path):
             os.remove(path)
 
+        # 2. 메모리 캐시에서 제거
         if speaker_id in self.personas:
             del self.personas[speaker_id]
+
+        # 3. QLoRA 어댑터 디렉터리 삭제
+        adapter_dir = os.path.join("adapters", speaker_id)
+        if os.path.exists(adapter_dir):
+            try:
+                shutil.rmtree(adapter_dir)
+                print(f"[INFO] Deleted adapter directory: {adapter_dir}")
+            except Exception as e:
+                print(f"[WARN] Failed to delete adapter directory: {e}")
 
         print(f"[INFO] Deleted persona: {speaker_id}")

@@ -287,18 +287,46 @@ class SpeakerPersonaWidget(QWidget):
         reply = QMessageBox.question(
             self,
             "화자 전체 삭제",
-            "모든 화자 정보를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
+            "모든 화자 정보를 삭제하시겠습니까?\n\n"
+            "이 작업은 되돌릴 수 없습니다.\n"
+            "화자 음성 데이터와 모든 페르소나가 함께 삭제됩니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            if self.speaker_manager.reset_all_speakers():
-                self.load_data()
-                self.mapping_changed.emit({})
-                QMessageBox.information(self, "완료", "모든 화자 정보가 삭제되었습니다.")
-            else:
-                QMessageBox.warning(self, "오류", "화자 정보 삭제 중 오류가 발생했습니다.")
+            try:
+                # 1. 모든 페르소나 삭제 (있으면)
+                if self.persona_manager:
+                    all_personas = self.persona_manager.get_all_personas()
+                    for persona in all_personas:
+                        try:
+                            self.persona_manager.delete_persona(persona.speaker_id)
+                        except Exception as e:
+                            print(f"[WARN] 페르소나 삭제 실패 ({persona.speaker_id}): {e}")
+
+                # 2. 모든 화자 삭제
+                if self.speaker_manager.reset_all_speakers():
+                    self.load_data()
+                    self.mapping_changed.emit({})
+
+                    # 3. ChatDock 페르소나 리스트 갱신 시그널 전송
+                    # 빈 speaker_id로 시그널 전송하여 ChatDock이 리스트를 다시 로드하도록
+                    self.persona_updated.emit("")
+
+                    QMessageBox.information(
+                        self,
+                        "완료",
+                        "모든 화자 정보와 페르소나가 삭제되었습니다."
+                    )
+                else:
+                    QMessageBox.warning(self, "오류", "화자 정보 삭제 중 오류가 발생했습니다.")
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "삭제 실패",
+                    f"화자/페르소나 삭제 중 오류가 발생했습니다:\n{str(e)}"
+                )
 
     def on_persona_updated(self, speaker_id: str):
         """페르소나 업데이트 시 호출"""

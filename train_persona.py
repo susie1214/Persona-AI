@@ -39,7 +39,7 @@ except ImportError as e:
 class PersonaTrainingConfig:
     """QLoRA 학습 설정"""
     # 모델
-    base_model: str = "Qwen/Qwen2.5-3B-Instruct"  # 또는 "meta-llama/Llama-3.2-3B-Instruct"
+    base_model: str = "models/kanana-1.5-2.1b-instruct"  # 로컬 Kanana 모델
 
     # QLoRA 설정
     lora_r: int = 16

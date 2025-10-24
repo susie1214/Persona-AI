@@ -68,11 +68,16 @@ class _Worker(QObject):
             self.sig_error.emit(str(e))
 
 class UploadMinutesWidget(QWidget):
-    def __init__(self, speaker_manager=None, persona_manager=None):
+    def __init__(self, speaker_manager=None, persona_manager=None, rag_store=None,
+                 auto_training_enabled=True, min_utterances_for_training=20):
         super().__init__()
         self.setObjectName("UploadMinutes")
         self.speaker_manager = speaker_manager
         self.persona_manager = persona_manager
+        self.rag_store = rag_store
+        self.auto_training_enabled = auto_training_enabled
+        self.min_utterances_for_training = min_utterances_for_training
+        self.training_workers = {}  # {speaker_id: PersonaTrainingWorker}
         L = QVBoxLayout(self)
 
         self.title = QLabel("<h2>모든 회의가 <span style='color:#3b82f6'>기록</span>되는 순간.</h2>"
@@ -171,6 +176,11 @@ class UploadMinutesWidget(QWidget):
         self.btn_save_md.setEnabled(True)
         self.btn_save_html.setEnabled(True)
         self.btn_share.setEnabled(True)
+
+        # 파일 처리 완료 후 자동 QLoRA 학습 트리거
+        if self.auto_training_enabled and self.rag_store and res.get("segments"):
+            self._trigger_auto_training(res["segments"])
+
         QMessageBox.information(self, "완료", "AI로 회의록을 생성했습니다.")
 
     def on_error(self, msg: str):
@@ -221,3 +231,122 @@ class UploadMinutesWidget(QWidget):
         final = f"{url}/{file}"
         self.url_box.setVisible(True); self.url_box.setText(final); self.url_box.setCursorPosition(0)
         webbrowser.open(final)
+
+    # ---------- QLoRA 자동 학습 ----------
+    def _trigger_auto_training(self, segments: list):
+        """
+        파일 처리 완료 후 화자별 자동 학습 트리거
+
+        Args:
+            segments: 처리된 세그먼트 리스트
+        """
+        if not self.rag_store or not self.rag_store.ok:
+            print("[WARN] RAG Store 없음 - 학습 불가")
+            return
+
+        # 세그먼트에서 화자 ID 추출
+        speaker_ids = list(set(seg.get("speaker") for seg in segments if seg.get("speaker") and seg.get("speaker") != "Unknown"))
+
+        if not speaker_ids:
+            print("[WARN] 식별된 화자가 없음 - 학습 건너뜀")
+            return
+
+        print(f"[INFO] 파일 처리 완료: {len(speaker_ids)}명의 화자 발견, 자동 학습 시작")
+
+        # 각 화자별로 발언 수 체크 및 학습 시작
+        for speaker_id in speaker_ids:
+            try:
+                # RAG에서 해당 화자의 발언 수 확인
+                results = self.rag_store.search_by_speaker(speaker_id, query="", topk=1000)
+                utterance_count = len(results)
+
+                if utterance_count < self.min_utterances_for_training:
+                    print(f"[INFO] {speaker_id}: 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀")
+                    continue
+
+                # 화자 이름 가져오기
+                speaker_name = speaker_id
+                if self.speaker_manager:
+                    speaker_name = self.speaker_manager.get_speaker_display_name(speaker_id)
+
+                # 학습 시작
+                self._start_training(speaker_id, speaker_name, utterance_count)
+
+            except Exception as e:
+                print(f"[ERROR] {speaker_id} 학습 체크 실패: {e}")
+
+    def _start_training(self, speaker_id: str, speaker_name: str, utterance_count: int):
+        """
+        특정 화자의 QLoRA 학습 시작
+
+        Args:
+            speaker_id: 화자 ID
+            speaker_name: 화자 이름
+            utterance_count: 발언 수
+        """
+        from core.persona_training_worker import PersonaTrainingWorker
+
+        # 이미 학습 중인지 체크
+        if speaker_id in self.training_workers:
+            existing_worker = self.training_workers[speaker_id]
+            if existing_worker.isRunning():
+                print(f"[WARN] {speaker_name} 이미 학습 중")
+                return
+
+        # Worker 생성
+        worker = PersonaTrainingWorker(
+            rag_store=self.rag_store,
+            speaker_id=speaker_id,
+            speaker_name=speaker_name,
+            min_utterances=self.min_utterances_for_training,
+            num_epochs=3,
+            batch_size=4,
+        )
+
+        # 시그널 연결
+        worker.sig_status.connect(self._on_training_status)
+        worker.sig_progress.connect(self._on_training_progress)
+        worker.sig_finished.connect(self._on_training_finished)
+        worker.sig_error.connect(self._on_training_error)
+
+        # 학습 시작
+        self.training_workers[speaker_id] = worker
+        worker.start()
+
+        print(f"[INFO] {speaker_name} QLoRA 학습 시작 (발언: {utterance_count}개)")
+
+    def _on_training_status(self, message: str):
+        """학습 상태 메시지"""
+        print(f"[TRAINING] {message}")
+
+    def _on_training_progress(self, progress: int):
+        """학습 진행률"""
+        print(f"[TRAINING] Progress: {progress}%")
+
+    def _on_training_finished(self, speaker_id: str, adapter_path: str):
+        """학습 완료 처리"""
+        speaker_name = speaker_id
+        if self.speaker_manager:
+            speaker_name = self.speaker_manager.get_speaker_display_name(speaker_id)
+
+        print(f"[INFO] ✅ {speaker_name} 학습 완료!")
+        print(f"[INFO]    어댑터: {adapter_path}")
+
+        # DigitalPersona에 어댑터 경로 저장
+        if self.persona_manager:
+            try:
+                persona = self.persona_manager.get_persona(speaker_id)
+                if persona:
+                    persona.qlora_adapter_path = adapter_path
+                    self.persona_manager.save_persona(persona)
+                    print(f"[INFO] 페르소나에 어댑터 경로 저장 완료")
+            except Exception as e:
+                print(f"[WARN] 어댑터 경로 저장 실패: {e}")
+
+        # Worker 정리
+        if speaker_id in self.training_workers:
+            del self.training_workers[speaker_id]
+
+    def _on_training_error(self, error_msg: str):
+        """학습 에러 처리"""
+        print(f"[ERROR] 학습 실패: {error_msg}")

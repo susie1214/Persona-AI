@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QPlainTextEdit, QLabel, QTabWidget, QSplitter, QComboBox,
     QCheckBox, QFormLayout, QLineEdit, QMessageBox, QDialog, QDialogButtonBox,
     QDateTimeEdit, QTextEdit, QDockWidget, QCalendarWidget, QDateEdit, QScrollArea,
+    QProgressBar,
 )
 
 from ui.survey_wizard import PersonaSurveyWizard
@@ -30,6 +31,7 @@ from core.speaker import SpeakerManager
 from core.digital_persona import DigitalPersonaManager
 from core.persona_store import PersonaStore
 from core.voice_store import VoiceStore
+from core.persona_training_worker import PersonaTrainingWorker, TrainingProgressWidget
 import numpy as np
 from core.schedule_store import Schedule as JSONSchedule, save_schedule as json_save, list_month as json_list_month, new_id as json_new_id
 
@@ -518,6 +520,14 @@ class MeetingConsole(QMainWindow):
         self.recording = False
         self.recording_start_time = None
 
+        # QLoRA 학습 관련 초기화
+        self.training_workers = {}  # {speaker_id: PersonaTrainingWorker}
+        self.auto_training_enabled = True  # 자동 학습 활성화 여부
+        self.min_utterances_for_training = 20  # 학습 최소 발언 수
+
+        # LLM 백엔드 설정
+        self.default_llm_backend = "kanana:kakaocorp/kanana-1.5-2.1b-instruct"  # 기본 LLM 백엔드
+
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
         self._build_live_tab()
@@ -532,7 +542,11 @@ class MeetingConsole(QMainWindow):
         self.on_status("✓ RAG Store 초기화 완료" if self.rag.ok else "⚠ RAG Store 사용 불가")
 
         self.chat_dock = QDockWidget("Persona Chatbot", self)
-        self.chat_panel = ChatDock(rag_store=self.rag, persona_manager=self.persona_manager)
+        self.chat_panel = ChatDock(
+            rag_store=self.rag,
+            persona_manager=self.persona_manager,
+            default_backend=self.default_llm_backend
+        )
         self.chat_dock.setWidget(self.chat_panel)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.chat_dock)
 
@@ -722,6 +736,12 @@ class MeetingConsole(QMainWindow):
         self.lbl_record_status = QLabel("녹음 중지됨")
         self.lbl_record_status.setStyleSheet("color: gray; font-weight: bold;")
         Rv.addWidget(self.lbl_record_status)
+
+        # QLoRA 학습 진행 상황 위젯 추가
+        self.training_progress = TrainingProgressWidget()
+        self.training_progress.hide()  # 초기에는 숨김
+        Rv.addWidget(self.training_progress)
+
         splitter.addWidget(right)
         splitter.setSizes([900, 380])
         L.addWidget(splitter)
@@ -974,6 +994,54 @@ class MeetingConsole(QMainWindow):
         layout.addWidget(QLabel("🔧 시스템 설정"))
         layout.addWidget(system_group)
 
+        # QLoRA 학습 설정 추가
+        training_group = QWidget()
+        T = QFormLayout(training_group)
+
+        self.chk_auto_training = QCheckBox("회의 종료 시 자동 학습")
+        self.chk_auto_training.setChecked(self.auto_training_enabled)
+        self.chk_auto_training.setToolTip("회의 종료 시 화자별 QLoRA 말투 학습을 자동으로 시작합니다")
+
+        self.spin_min_utterances = QLineEdit()
+        self.spin_min_utterances.setText(str(self.min_utterances_for_training))
+        self.spin_min_utterances.setPlaceholderText("최소 발언 수")
+        self.spin_min_utterances.setToolTip("학습에 필요한 최소 발언 수 (권장: 20개 이상)")
+
+        T.addRow("자동 학습:", self.chk_auto_training)
+        T.addRow("최소 발언 수:", self.spin_min_utterances)
+
+        layout.addWidget(QLabel("🧠 QLoRA 페르소나 학습"))
+        layout.addWidget(training_group)
+
+        # LLM 백엔드 설정 추가
+        llm_group = QWidget()
+        L = QFormLayout(llm_group)
+
+        self.cmb_llm_backend = QComboBox()
+        # 사용 가능한 LLM 백엔드 목록
+        llm_backends = [
+            ("OpenAI GPT-4o-mini", "openai:gpt-4o-mini"),
+            ("A.X-4.0 (4-bit)", "ax:skt/A.X-4.0"),
+            ("Midm-2.0-Mini (4-bit)", "midm:K-intelligence/Midm-2.0-Mini-Instruct"),
+            ("Kanana-1.5-2.1b (4-bit)", "kanana:kakaocorp/kanana-1.5-2.1b-instruct"),
+            ("Ollama Llama3", "ollama:llama3"),
+        ]
+
+        for display_name, backend_id in llm_backends:
+            self.cmb_llm_backend.addItem(display_name, backend_id)
+
+        # 기본값 설정
+        idx = self.cmb_llm_backend.findData(self.default_llm_backend)
+        if idx >= 0:
+            self.cmb_llm_backend.setCurrentIndex(idx)
+
+        self.cmb_llm_backend.setToolTip("챗봇 및 요약에 사용할 기본 LLM 백엔드를 선택하세요")
+
+        L.addRow("기본 LLM 백엔드:", self.cmb_llm_backend)
+
+        layout.addWidget(QLabel("🤖 LLM 백엔드 설정"))
+        layout.addWidget(llm_group)
+
         self.meeting_settings = MeetingSettingsWidget(
             speaker_manager=self.speaker_manager,
             persona_manager=self.persona_manager
@@ -986,6 +1054,9 @@ class MeetingConsole(QMainWindow):
 
         # 버튼 연결
         self.btn_clear_db.clicked.connect(self.on_clear_vector_db)
+        self.chk_auto_training.stateChanged.connect(self._on_auto_training_changed)
+        self.spin_min_utterances.textChanged.connect(self._on_min_utterances_changed)
+        self.cmb_llm_backend.currentIndexChanged.connect(self._on_llm_backend_changed)
 
     def _apply_theme(self):
         self.setStyleSheet(
@@ -1049,6 +1120,10 @@ class MeetingConsole(QMainWindow):
             if speaker_ids:
                 self.persona_manager.on_meeting_ended(speaker_ids)
                 self.on_status(f"회의 종료: {len(speaker_ids)}명 참여자 기록 업데이트")
+
+                # 자동 학습 트리거
+                if self.auto_training_enabled:
+                    self._trigger_auto_training(speaker_ids)
 
         if saved_path:
             duration = time.time() - self.recording_start_time if self.recording_start_time else 0
@@ -1663,3 +1738,167 @@ class MeetingConsole(QMainWindow):
         recent_segments = self.state.live_segments[-10:]
         preview_lines = [f"[{seg.speaker_name}] {seg.text}" for seg in recent_segments if getattr(seg, "text", "").strip()]
         self.txt_preview.setPlainText("\n".join(preview_lines) if preview_lines else "대화 내용을 분석 중입니다...")
+
+    # ========== QLoRA 자동 학습 관련 메서드 ==========
+
+    def _on_auto_training_changed(self, state):
+        """자동 학습 설정 변경"""
+        self.auto_training_enabled = (state == Qt.CheckState.Checked.value)
+        self.on_status(f"자동 학습: {'활성화' if self.auto_training_enabled else '비활성화'}")
+
+    def _on_min_utterances_changed(self, text):
+        """최소 발언 수 설정 변경"""
+        try:
+            value = int(text)
+            if value > 0:
+                self.min_utterances_for_training = value
+        except ValueError:
+            pass
+
+    def _on_llm_backend_changed(self, index):
+        """LLM 백엔드 설정 변경"""
+        backend_id = self.cmb_llm_backend.itemData(index)
+        if backend_id:
+            self.default_llm_backend = backend_id
+            self.on_status(f"기본 LLM 백엔드 변경: {backend_id}")
+
+            # ChatDock에도 반영
+            if hasattr(self, 'chat_panel'):
+                self.chat_panel.set_default_backend(backend_id)
+
+    def _trigger_auto_training(self, speaker_ids: List[str]):
+        """
+        회의 종료 시 화자별 자동 학습 트리거
+
+        Args:
+            speaker_ids: 참여한 화자 ID 리스트
+        """
+        if not self.rag or not self.rag.ok:
+            self.on_status("⚠ RAG Store 없음 - 학습 불가")
+            return
+
+        # 각 화자별로 발언 수 체크 및 학습 시작
+        for speaker_id in speaker_ids:
+            # RAG에서 해당 화자의 발언 수 확인
+            try:
+                results = self.rag.search_by_speaker(speaker_id, query="", topk=1000)
+                utterance_count = len(results)
+
+                if utterance_count < self.min_utterances_for_training:
+                    self.on_status(
+                        f"⏭ {speaker_id}: 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀"
+                    )
+                    continue
+
+                # 화자 이름 가져오기
+                speaker_name = self.state.speaker_map.get(speaker_id, speaker_id)
+
+                # 학습 시작
+                self._start_training(speaker_id, speaker_name, utterance_count)
+
+            except Exception as e:
+                self.on_status(f"❌ {speaker_id} 학습 체크 실패: {e}")
+
+    def _start_training(self, speaker_id: str, speaker_name: str, utterance_count: int):
+        """
+        특정 화자의 QLoRA 학습 시작
+
+        Args:
+            speaker_id: 화자 ID
+            speaker_name: 화자 이름
+            utterance_count: 발언 수
+        """
+        # 이미 학습 중인지 체크
+        if speaker_id in self.training_workers:
+            existing_worker = self.training_workers[speaker_id]
+            if existing_worker.isRunning():
+                self.on_status(f"⚠ {speaker_name} 이미 학습 중")
+                return
+
+        # Worker 생성
+        worker = PersonaTrainingWorker(
+            rag_store=self.rag,
+            speaker_id=speaker_id,
+            speaker_name=speaker_name,
+            min_utterances=self.min_utterances_for_training,
+            num_epochs=3,
+            batch_size=4,
+        )
+
+        # 시그널 연결
+        worker.sig_status.connect(self._on_training_status)
+        worker.sig_progress.connect(self._on_training_progress)
+        worker.sig_finished.connect(self._on_training_finished)
+        worker.sig_error.connect(self._on_training_error)
+
+        # 진행 위젯 표시
+        self.training_progress.reset()
+        self.training_progress.show()
+        self.training_progress.update_status(f"🚀 {speaker_name} 학습 준비 중...")
+
+        # 학습 시작
+        self.training_workers[speaker_id] = worker
+        worker.start()
+
+        self.on_status(f"🧠 {speaker_name} QLoRA 학습 시작 (발언: {utterance_count}개)")
+
+    def _on_training_status(self, message: str):
+        """학습 상태 메시지 업데이트"""
+        self.training_progress.update_status(message)
+        self.on_status(message)
+
+    def _on_training_progress(self, progress: int):
+        """학습 진행률 업데이트"""
+        self.training_progress.update_progress(progress)
+
+    def _on_training_finished(self, speaker_id: str, adapter_path: str):
+        """학습 완료 처리"""
+        speaker_name = self.state.speaker_map.get(speaker_id, speaker_id)
+
+        self.training_progress.set_success()
+        self.on_status(f"✅ {speaker_name} 학습 완료!")
+        self.on_status(f"   어댑터 저장 위치: {adapter_path}")
+
+        # 3초 후 진행 위젯 숨김
+        QTimer.singleShot(3000, self.training_progress.hide)
+
+        # DigitalPersona에 어댑터 경로 저장
+        if self.persona_manager:
+            try:
+                persona = self.persona_manager.get_persona(speaker_id)
+                if persona:
+                    persona.qlora_adapter_path = adapter_path
+                    self.persona_manager.save_persona(speaker_id)
+                    self.on_status(f"   페르소나에 어댑터 경로 저장됨")
+            except Exception as e:
+                self.on_status(f"⚠ 페르소나 업데이트 실패: {e}")
+
+        # Worker 정리
+        if speaker_id in self.training_workers:
+            del self.training_workers[speaker_id]
+
+        # 완료 알림
+        QMessageBox.information(
+            self,
+            "학습 완료",
+            f"{speaker_name}님의 말투 학습이 완료되었습니다!\n\n"
+            f"어댑터: {adapter_path}\n\n"
+            f"이제 챗봇에서 {speaker_name}님의 말투로 대화할 수 있습니다."
+        )
+
+    def _on_training_error(self, error_msg: str):
+        """학습 에러 처리"""
+        self.training_progress.set_error(error_msg)
+        self.on_status(f"❌ 학습 실패: {error_msg}")
+
+        # 5초 후 진행 위젯 숨김
+        QTimer.singleShot(5000, self.training_progress.hide)
+
+        # 에러 다이얼로그
+        QMessageBox.warning(
+            self,
+            "학습 실패",
+            f"페르소나 학습 중 오류가 발생했습니다.\n\n{error_msg[:200]}\n\n"
+            f"PEFT 라이브러리가 설치되어 있는지 확인하세요:\n"
+            f"pip install peft transformers accelerate bitsandbytes"
+        )
