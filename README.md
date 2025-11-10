@@ -79,6 +79,7 @@
  │ - Schedules           │
  └───────────────────────┘
 ```
+<img width="600" height="1100" alt="Persona_AI_Flowchart (1)" src="https://github.com/user-attachments/assets/9ac0df38-d7ae-4476-8bd0-96abec9f7e0e" />
 
 ---
 
