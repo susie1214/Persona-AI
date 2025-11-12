@@ -71,7 +71,7 @@ class KananaLLM():
             max_new_tokens: 최대 생성 토큰 수
 
         Returns:
-            생성된 텍스트
+            생성된 텍스트 (프롬프트 제외, 대답만)
         """
         # 모델의 실제 device 자동 감지 (device_map="auto" 사용 시 필수)
         device = next(self.model.parameters()).device
@@ -79,6 +79,7 @@ class KananaLLM():
 
         # 입력 토큰화
         inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+        prompt_token_count = inputs["input_ids"].shape[1]  # 프롬프트의 토큰 개수 기록
 
         # token_type_ids 제거 (일부 모델에서 불필요)
         inputs.pop("token_type_ids", None)
@@ -97,7 +98,62 @@ class KananaLLM():
         # 디코딩
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        return generated_text
+        # 대답만 추출: 프롬프트 제외한 부분만 반환
+        answer_only = self._extract_answer_only(prompt, generated_text, prompt_token_count, outputs[0])
+
+        return answer_only
+
+    def _extract_answer_only(self, original_prompt: str, full_text: str, prompt_token_count: int, output_tokens) -> str:
+        """
+        생성된 텍스트에서 프롬프트 부분을 제거하고 대답만 추출
+
+        Args:
+            original_prompt: 원본 프롬프트
+            full_text: 전체 생성 텍스트 (프롬프트 + 대답)
+            prompt_token_count: 프롬프트의 토큰 개수
+            output_tokens: 생성된 전체 토큰
+
+        Returns:
+            대답만 추출된 텍스트
+        """
+        # 방법 1: [ANSWER] 마커 기반 추출
+        if "[ANSWER]" in full_text:
+            start_idx = full_text.find("[ANSWER]") + len("[ANSWER]")
+            answer = full_text[start_idx:].strip()
+            # [END] 또는 [USER] 마커까지만 추출
+            for end_marker in ["[END]", "[USER]", "\n사용자:", "\n[USER]"]:
+                if end_marker in answer:
+                    answer = answer[:answer.find(end_marker)].strip()
+                    break
+            if answer:
+                return answer
+
+        # 방법 2: 문자열 제거로 대답 추출
+        if full_text.startswith(original_prompt):
+            answer = full_text[len(original_prompt):].strip()
+            # 대화형 포맷 중단 (사용자 다음 질문이 나타나면 제거)
+            for stop_marker in ["\n사용자:", "\n[USER]", "[END]"]:
+                if stop_marker in answer:
+                    answer = answer[:answer.find(stop_marker)].strip()
+            if answer:
+                return answer
+
+        # 방법 3: 토큰 기반 추출 (신뢰도 높음)
+        try:
+            # 생성된 토큰만 디코딩
+            answer_tokens = output_tokens[prompt_token_count:]
+            answer = self.tokenizer.decode(answer_tokens, skip_special_tokens=True).strip()
+            # 대화형 포맷 중단
+            for stop_marker in ["\n사용자:", "\n[USER]", "[END]"]:
+                if stop_marker in answer:
+                    answer = answer[:answer.find(stop_marker)].strip()
+            if answer:
+                return answer
+        except Exception as e:
+            print(f"[WARN] 토큰 기반 추출 실패: {e}")
+
+        # 폴백: 전체 텍스트 반환
+        return full_text.strip()
 
 
 if __name__ == "__main__":

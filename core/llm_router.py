@@ -95,6 +95,14 @@ class LLMRouter:
         # fallback
         return OpenAILLM("gpt-4o-mini")
 
-    def complete(self, backend: Optional[str], prompt: str, temperature: float = 0.2) -> str:
+    def complete(self, backend: Optional[str], prompt: str, temperature: float = 0.2, max_new_tokens: Optional[int] = None) -> str:
         m = self.get_model(backend)
-        return m.complete(prompt, temperature=temperature)
+        # max_new_tokens 지원 여부에 따라 조건부로 전달
+        try:
+            if max_new_tokens is not None:
+                return m.complete(prompt, temperature=temperature, max_new_tokens=max_new_tokens)
+            else:
+                return m.complete(prompt, temperature=temperature)
+        except TypeError:
+            # max_new_tokens을 지원하지 않는 모델의 경우
+            return m.complete(prompt, temperature=temperature)

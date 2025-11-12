@@ -235,7 +235,7 @@ class UploadMinutesWidget(QWidget):
     # ---------- QLoRA 자동 학습 ----------
     def _trigger_auto_training(self, segments: list):
         """
-        파일 처리 완료 후 화자별 자동 학습 트리거
+        파일 처리 완료 후 화자별 자동 학습 트리거 (순차 학습)
 
         Args:
             segments: 처리된 세그먼트 리스트
@@ -251,17 +251,25 @@ class UploadMinutesWidget(QWidget):
             print("[WARN] 식별된 화자가 없음 - 학습 건너뜀")
             return
 
-        print(f"[INFO] 파일 처리 완료: {len(speaker_ids)}명의 화자 발견, 자동 학습 시작")
+        print(f"[INFO] 파일 처리 완료: {len(speaker_ids)}명의 화자 발견, 순차 학습 시작")
 
-        # 각 화자별로 발언 수 체크 및 학습 시작
+        # 필터링: 발언 수 충분한 화자만 추출
+        speakers_to_train = []
         for speaker_id in speaker_ids:
             try:
                 # RAG에서 해당 화자의 발언 수 확인
                 results = self.rag_store.search_by_speaker(speaker_id, query="", topk=1000)
-                utterance_count = len(results)
+
+                # 짧은 발언 필터링 (3단어 이상만 학습 대상)
+                valid_utterances = [
+                    utt for utt in results
+                    if utt.get("text") and len(utt.get("text", "").strip().split()) >= 3
+                ]
+                utterance_count = len(valid_utterances)
 
                 if utterance_count < self.min_utterances_for_training:
-                    print(f"[INFO] {speaker_id}: 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀")
+                    print(f"[INFO] {speaker_id}: 유효한 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀")
+                    print(f"       (전체: {len(results)}개, 필터링됨: {len(results) - utterance_count}개)")
                     continue
 
                 # 화자 이름 가져오기
@@ -269,15 +277,88 @@ class UploadMinutesWidget(QWidget):
                 if self.speaker_manager:
                     speaker_name = self.speaker_manager.get_speaker_display_name(speaker_id)
 
-                # 학습 시작
-                self._start_training(speaker_id, speaker_name, utterance_count)
+                speakers_to_train.append((speaker_id, speaker_name, utterance_count))
 
             except Exception as e:
                 print(f"[ERROR] {speaker_id} 학습 체크 실패: {e}")
 
+        # 순차 학습: 한 명씩 완료 후 다음 사람 진행
+        if speakers_to_train:
+            print(f"[INFO] 총 {len(speakers_to_train)}명의 화자 순차 학습 시작")
+            self._train_speakers_sequentially(speakers_to_train, index=0)
+
+    def _train_speakers_sequentially(self, speakers_to_train: list, index: int):
+        """
+        화자들을 순차적으로 학습 (재귀함수)
+
+        Args:
+            speakers_to_train: [(speaker_id, speaker_name, utterance_count), ...] 리스트
+            index: 현재 학습할 화자의 인덱스
+        """
+        if index >= len(speakers_to_train):
+            # 모든 화자 학습 완료
+            print(f"[INFO] ✅ 모든 화자 학습 완료!")
+            return
+
+        speaker_id, speaker_name, utterance_count = speakers_to_train[index]
+        print(f"[INFO] 🔄 [{index + 1}/{len(speakers_to_train)}] {speaker_name} 학습 시작...")
+
+        # 다음 화자 학습을 위한 콜백 등록
+        def on_next_speaker():
+            print(f"[INFO] ✅ {speaker_name} 학습 완료! 다음 화자 준비 중...")
+            self._train_speakers_sequentially(speakers_to_train, index + 1)
+
+        # 현재 화자 학습 시작 (완료 시 on_next_speaker 호출)
+        self._start_training_with_callback(speaker_id, speaker_name, utterance_count, on_next_speaker)
+
+    def _start_training_with_callback(self, speaker_id: str, speaker_name: str, utterance_count: int, on_complete_callback):
+        """
+        특정 화자의 QLoRA 학습 시작 (완료 콜백 포함)
+
+        Args:
+            speaker_id: 화자 ID
+            speaker_name: 화자 이름
+            utterance_count: 발언 수
+            on_complete_callback: 학습 완료 시 호출할 콜백 함수
+        """
+        from core.persona_training_worker import PersonaTrainingWorker
+
+        # 이미 학습 중인지 체크
+        if speaker_id in self.training_workers:
+            existing_worker = self.training_workers[speaker_id]
+            if existing_worker.isRunning():
+                print(f"[WARN] {speaker_name} 이미 학습 중")
+                return
+
+        # Worker 생성
+        worker = PersonaTrainingWorker(
+            rag_store=self.rag_store,
+            speaker_id=speaker_id,
+            speaker_name=speaker_name,
+            min_utterances=self.min_utterances_for_training,
+            num_epochs=3,          # 원래 설정
+            batch_size=4,          # 원래 설정
+        )
+
+        # 시그널 연결
+        worker.sig_status.connect(self._on_training_status)
+        worker.sig_progress.connect(self._on_training_progress)
+        # 완료 시 콜백 함수 먼저 호출 후 기본 처리
+        worker.sig_finished.connect(lambda sid, path: (
+            on_complete_callback(),
+            self._on_training_finished(sid, path)
+        ))
+        worker.sig_error.connect(self._on_training_error)
+
+        # 학습 시작
+        self.training_workers[speaker_id] = worker
+        worker.start()
+
+        print(f"[INFO] {speaker_name} QLoRA 학습 시작 (발언: {utterance_count}개)")
+
     def _start_training(self, speaker_id: str, speaker_name: str, utterance_count: int):
         """
-        특정 화자의 QLoRA 학습 시작
+        특정 화자의 QLoRA 학습 시작 (기본 버전)
 
         Args:
             speaker_id: 화자 ID
@@ -299,8 +380,8 @@ class UploadMinutesWidget(QWidget):
             speaker_id=speaker_id,
             speaker_name=speaker_name,
             min_utterances=self.min_utterances_for_training,
-            num_epochs=3,
-            batch_size=4,
+            num_epochs=3,          # 원래 설정
+            batch_size=4,          # 원래 설정
         )
 
         # 시그널 연결

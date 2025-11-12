@@ -17,17 +17,23 @@ class LLMWorker(QObject):
     sig_done = Signal(str)  # 성공 시 응답 텍스트
     sig_error = Signal(str)  # 오류 시 에러 메시지
 
-    def __init__(self, router, backend, prompt, temperature):
+    def __init__(self, router, backend, prompt, temperature, max_new_tokens=None):
         super().__init__()
         self.router = router
         self.backend = backend
         self.prompt = prompt
         self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
 
     def run(self):
         """LLM 호출 실행 (별도 스레드에서)"""
         try:
-            answer = self.router.complete(self.backend, self.prompt, temperature=self.temperature)
+            # max_new_tokens가 설정되었으면 전달 (Kanana 등 지원하는 모델용)
+            kwargs = {"temperature": self.temperature}
+            if self.max_new_tokens is not None:
+                kwargs["max_new_tokens"] = self.max_new_tokens
+
+            answer = self.router.complete(self.backend, self.prompt, **kwargs)
             self.sig_done.emit(answer)
         except Exception as e:
             import traceback
@@ -116,6 +122,8 @@ class ChatDock(QWidget):
         self.view.setUniformItemSizes(False)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setWordWrap(True)
+        # 텍스트 드래그 선택 및 복사 활성화
+        self.view.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         layout.addWidget(self.view, 1)
 
         # 초기 상태 안내 (주석 처리 - 대답만 표시)
@@ -131,7 +139,15 @@ class ChatDock(QWidget):
         layout.addLayout(sub)
 
         self.btn.clicked.connect(self.on_send)
-        self.edit.returnPressed.connect(self.on_send)
+        # Enter 키는 LLM 처리 중일 때 무시되도록 on_send에서 처리
+        self.edit.returnPressed.connect(self._on_enter_pressed)
+
+    def _on_enter_pressed(self):
+        """Enter 키 입력 처리 (LLM 처리 중이면 무시)"""
+        # LLM 처리 중이면 엔터 키 무시
+        if self.llm_thread and self.llm_thread.isRunning():
+            return
+        self.on_send()
 
     # ---------- 페르소나 관리 ----------
     def load_personas(self):
@@ -194,6 +210,8 @@ class ChatDock(QWidget):
         # 라벨 + 본문(두 줄)
         text_block = f"{label}\n{text}"
         it = QListWidgetItem(icon, text_block)
+        # 텍스트 선택 가능하게 설정
+        it.setFlags(it.flags() | Qt.ItemFlag.ItemIsSelectable)
         # 대충 높이 가늠(본문 길이에 따라 늘려줌)
         # approx_lines = max(1, len(text) // 38 + 1)
         # it.setSizeHint(QSize(0, 26 + approx_lines * 18))
@@ -269,10 +287,11 @@ class ChatDock(QWidget):
         sys_prompt = self._system_prompt
         backend_label = self._current_backend  # 페르소나 설정에서 가져온 백엔드 사용
 
-        prompt = f"[SYSTEM]\n{sys_prompt}\n\n"
+        # Kanana 모델용 프롬프트 포맷 (단일 턴 생성)
+        prompt = f"{sys_prompt}\n\n"
         if context_block:
-            prompt += f"[CONTEXT]\n{context_block}\n\n"
-        prompt += f"[USER]\n{q}"
+            prompt += f"{context_block}\n\n"
+        prompt += f"사용자: {q}\n어시스턴트: "  # Kanana 채팅 포맷
 
         # "생각 중..." 메시지 제거 (대답만 표시)
         # self._append_status("🤔 답변 생성 중...")
@@ -283,7 +302,8 @@ class ChatDock(QWidget):
 
         # 비동기 LLM 호출
         self.llm_thread = QThread()
-        self.llm_worker = LLMWorker(self.router, backend_label, prompt, temperature=0.3)
+        # Kanana 모델의 경우 max_new_tokens를 명시적으로 제한하여 과도한 생성 방지
+        self.llm_worker = LLMWorker(self.router, backend_label, prompt, temperature=0.3, max_new_tokens=512)
         self.llm_worker.moveToThread(self.llm_thread)
 
         # 시그널 연결

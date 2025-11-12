@@ -204,21 +204,6 @@ class SpeakerManager:
 
         return success
 
-    def reset_all_speakers(self) -> bool:
-        """모든 화자 정보 초기화"""
-        if not self.voice_store.ok:
-            return False
-
-        # 1. DB 초기화
-        self.voice_store.delete_all_speakers()
-
-        # 2. 메모리 캐시 초기화
-        self.speakers = {}
-        self.next_speaker_id_num = 1
-
-        print("[INFO] All speakers have been reset.")
-        return True
-
     def reload(self):
         """DB에서 강제로 다시 로드"""
         print("[INFO] Reloading speakers from VoiceStore...")

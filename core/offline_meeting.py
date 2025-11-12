@@ -316,7 +316,7 @@ def _match_speakers_by_overlap(
                 segment_embedding = np.mean(segment_embedding, axis=0)
 
                 # SpeakerManager로 화자 식별
-                speaker_id, confidence = speaker_manager.identify_speaker(segment_embedding, threshold=0.72)
+                speaker_id, confidence = speaker_manager.identify_speaker(segment_embedding, threshold=0.58)
                 # 화자 ID를 표시 이름으로 변환
                 speaker = speaker_manager.get_speaker_display_name(speaker_id)
                 print(f"[INFO] Identified speaker: {speaker_id} -> {speaker} (confidence: {confidence:.3f})")
@@ -372,7 +372,8 @@ def _match_speakers_by_overlap(
             display_name = speaker_manager.get_speaker_display_name(speaker)
 
         out.append({
-            "speaker": display_name,
+            "speaker_id": speaker,  # speaker_id 저장 (persona lookup 시 사용)
+            "speaker": display_name,  # display_name (UI 표시용)
             "text": w_text,
             "start": w_start,
             "end": w_end,
@@ -656,7 +657,8 @@ def _populate_digital_personas(
     # 화자별 발언 그룹화
     speaker_utterances = {}
     for seg in segments:
-        speaker_id = seg.get("speaker", "Unknown")
+        # speaker_id가 있으면 사용, 없으면 speaker(display_name) 시도
+        speaker_id = seg.get("speaker_id") or seg.get("speaker", "Unknown")
         if speaker_id == "Unknown":
             continue
 
@@ -810,7 +812,7 @@ def process_audio_file(
             )
 
             # 파일 전사 완료 = 1회 회의 완료 처리
-            speaker_ids = list(set(seg.get('speaker') for seg in merged if seg.get('speaker')))
+            speaker_ids = list(set(seg.get('speaker_id') or seg.get('speaker') for seg in merged if seg.get('speaker_id') or seg.get('speaker')))
             if speaker_ids:
                 persona_manager.on_meeting_ended(speaker_ids)
                 print(f"[INFO] File transcription completed: meeting count updated for {len(speaker_ids)} speakers")

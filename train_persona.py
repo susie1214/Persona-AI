@@ -39,7 +39,7 @@ except ImportError as e:
 class PersonaTrainingConfig:
     """QLoRA 학습 설정"""
     # 모델
-    base_model: str = "models/kanana-1.5-2.1b-instruct"  # 로컬 Kanana 모델
+    base_model: str = "models/kanana-1.5-2.1b-instruct"  # Kanana 2.1B 로컬 모델
 
     # QLoRA 설정
     lora_r: int = 16
@@ -48,8 +48,8 @@ class PersonaTrainingConfig:
     target_modules: list = field(default_factory=lambda: ["q_proj", "v_proj", "k_proj", "o_proj"])
 
     # 학습 설정
-    num_epochs: int = 3
-    batch_size: int = 4
+    num_epochs: int = 3         # 3 에포크 (원래 설정)
+    batch_size: int = 4         # 배치 크기 4 (원래 설정)
     gradient_accumulation_steps: int = 4
     learning_rate: float = 2e-4
     warmup_steps: int = 10
@@ -61,7 +61,7 @@ class PersonaTrainingConfig:
     save_steps: int = 50
 
     # 하드웨어
-    use_4bit: bool = True
+    use_4bit: bool = True      # 4-bit 양자화 활성화 (메모리 효율성)
     use_fp16: bool = True
 
 

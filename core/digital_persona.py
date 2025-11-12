@@ -273,11 +273,38 @@ class DigitalPersonaManager:
             print(f"[ERROR] Failed to load persona {speaker_id}: {e}")
             return None
 
+    def _is_valid_utterance(self, text: str, min_words: int = 3) -> bool:
+        """
+        학습 및 RAG에 사용할 유효한 발언인지 확인
+        - 최소 단어 수 기준 (예: "어?", "네" 같은 짧은 발언 제외)
+
+        Args:
+            text: 발언 텍스트
+            min_words: 최소 단어 수 (기본값: 3)
+
+        Returns:
+            유효 여부
+        """
+        if not text or not text.strip():
+            return False
+
+        # 단어 수 계산 (공백 기준)
+        word_count = len(text.strip().split())
+        if word_count < min_words:
+            return False
+
+        return True
+
     def add_utterance(self, speaker_id: str, text: str, start: float, end: float):
-        """발언 추가 (RAG에 저장)"""
+        """발언 추가 (RAG에 저장, 짧은 발언은 필터링)"""
         persona = self.get_persona(speaker_id)
         if not persona:
             print(f"[WARN] Persona not found: {speaker_id}")
+            return
+
+        # 짧은 발언 필터링
+        if not self._is_valid_utterance(text):
+            print(f"[DEBUG] Skipped short utterance: '{text[:30]}...' (speaker: {speaker_id})")
             return
 
         # RAG에 발언 저장

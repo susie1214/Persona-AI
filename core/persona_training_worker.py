@@ -37,8 +37,8 @@ class PersonaTrainingWorker(QThread):
         speaker_id: str,
         speaker_name: Optional[str] = None,
         min_utterances: int = 20,
-        num_epochs: int = 3,
-        batch_size: int = 4,
+        num_epochs: int = 1,
+        batch_size: int = 2,
         base_model: str = "models/kanana-1.5-2.1b-instruct"
     ):
         super().__init__()

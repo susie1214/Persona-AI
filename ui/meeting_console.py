@@ -976,9 +976,12 @@ class MeetingConsole(QMainWindow):
             self.edit_hf.setText(f"{existing_token}")
             self.edit_hf.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # Vector DB 초기화 버튼
-        self.btn_clear_db = QPushButton("Vector DB 초기화")
+        # Vector DB 초기화 버튼들
+        self.btn_clear_db = QPushButton("Vector DB 초기화 (회의만)")
         self.btn_clear_db.setStyleSheet("background-color: #fee2e2; color: #991b1b;")
+
+        self.btn_clear_all_db = QPushButton("모든 VectorDB 초기화")
+        self.btn_clear_all_db.setStyleSheet("background-color: #dc2626; color: #ffffff; font-weight: bold;")
 
         F.addRow("Whisper Model", self.cmb_asr)
         F.addRow("", self.chk_gpu)
@@ -988,6 +991,7 @@ class MeetingConsole(QMainWindow):
         # DB 관리 버튼
         db_buttons = QHBoxLayout()
         db_buttons.addWidget(self.btn_clear_db)
+        db_buttons.addWidget(self.btn_clear_all_db)
         db_buttons.addStretch()
         F.addRow("DB 관리:", db_buttons)
 
@@ -1054,6 +1058,7 @@ class MeetingConsole(QMainWindow):
 
         # 버튼 연결
         self.btn_clear_db.clicked.connect(self.on_clear_vector_db)
+        self.btn_clear_all_db.clicked.connect(self.on_clear_all_vector_db)
         self.chk_auto_training.stateChanged.connect(self._on_auto_training_changed)
         self.spin_min_utterances.textChanged.connect(self._on_min_utterances_changed)
         self.cmb_llm_backend.currentIndexChanged.connect(self._on_llm_backend_changed)
@@ -1192,11 +1197,11 @@ class MeetingConsole(QMainWindow):
         self.chk_diar.setChecked(self.state.diarization_enabled)
 
     def on_clear_vector_db(self):
-        """Vector DB를 초기화"""
+        """Vector DB를 초기화 (회의 컬렉션만)"""
         reply = QMessageBox.question(
             self,
             "Vector DB 초기화",
-            "정말로 Vector DB의 모든 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
+            "정말로 Vector DB의 모든 데이터를 삭제하시겠습니까?\n(회의 컬렉션만 삭제됩니다)\n이 작업은 되돌릴 수 없습니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -1204,11 +1209,37 @@ class MeetingConsole(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             if self.rag and self.rag.ok:
                 if self.rag.clear_collection():
-                    self.on_status("✓ Vector DB가 성공적으로 초기화되었습니다.")
-                    QMessageBox.information(self, "완료", "Vector DB가 초기화되었습니다.")
+                    self.on_status("✓ Vector DB가 성공적으로 초기화되었습니다. (회의 컬렉션)")
+                    QMessageBox.information(self, "완료", "Vector DB가 초기화되었습니다.\n(회의 컬렉션만 삭제됨)")
                 else:
                     self.on_status("⚠ Vector DB 초기화에 실패했습니다.")
                     QMessageBox.warning(self, "오류", "Vector DB 초기화 중 오류가 발생했습니다.")
+            else:
+                self.on_status("⚠ RAG Store가 초기화되지 않아 DB를 초기화할 수 없습니다.")
+                QMessageBox.warning(self, "오류", "RAG Store가 유효하지 않습니다.")
+
+    def on_clear_all_vector_db(self):
+        """모든 VectorDB를 초기화 (회의 + 문서)"""
+        reply = QMessageBox.warning(
+            self,
+            "⚠️ 모든 VectorDB 초기화",
+            "정말로 모든 VectorDB 데이터를 삭제하시겠습니까?\n\n삭제될 데이터:\n- 회의 컬렉션 (meeting_ctx)\n- 문서 컬렉션 (project_docs)\n\n이 작업은 되돌릴 수 없습니다!",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            if self.rag and self.rag.ok:
+                if self.rag.clear_all_collections():
+                    self.on_status("✓ 모든 VectorDB가 성공적으로 초기화되었습니다.")
+                    QMessageBox.information(
+                        self,
+                        "완료",
+                        "모든 VectorDB가 초기화되었습니다.\n\n삭제된 데이터:\n- 회의 컬렉션 (meeting_ctx)\n- 문서 컬렉션 (project_docs)"
+                    )
+                else:
+                    self.on_status("⚠ VectorDB 초기화에 실패했습니다.")
+                    QMessageBox.warning(self, "오류", "VectorDB 초기화 중 오류가 발생했습니다.")
             else:
                 self.on_status("⚠ RAG Store가 초기화되지 않아 DB를 초기화할 수 없습니다.")
                 QMessageBox.warning(self, "오류", "RAG Store가 유효하지 않습니다.")
@@ -1768,7 +1799,7 @@ class MeetingConsole(QMainWindow):
 
     def _trigger_auto_training(self, speaker_ids: List[str]):
         """
-        회의 종료 시 화자별 자동 학습 트리거
+        회의 종료 시 화자별 자동 학습 트리거 (순차 학습)
 
         Args:
             speaker_ids: 참여한 화자 ID 리스트
@@ -1777,27 +1808,109 @@ class MeetingConsole(QMainWindow):
             self.on_status("⚠ RAG Store 없음 - 학습 불가")
             return
 
-        # 각 화자별로 발언 수 체크 및 학습 시작
+        # 필터링: 발언 수 충분한 화자만 추출
+        speakers_to_train = []
         for speaker_id in speaker_ids:
-            # RAG에서 해당 화자의 발언 수 확인
             try:
                 results = self.rag.search_by_speaker(speaker_id, query="", topk=1000)
-                utterance_count = len(results)
+
+                # 짧은 발언 필터링 (3단어 이상만 학습 대상)
+                valid_utterances = [
+                    utt for utt in results
+                    if utt.get("text") and len(utt.get("text", "").strip().split()) >= 3
+                ]
+                utterance_count = len(valid_utterances)
 
                 if utterance_count < self.min_utterances_for_training:
                     self.on_status(
-                        f"⏭ {speaker_id}: 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀"
+                        f"⏭ {speaker_id}: 유효한 발언 수 부족 ({utterance_count}/{self.min_utterances_for_training}) - 학습 건너뜀 "
+                        f"(전체: {len(results)}개, 필터링됨: {len(results) - utterance_count}개)"
                     )
                     continue
 
                 # 화자 이름 가져오기
                 speaker_name = self.state.speaker_map.get(speaker_id, speaker_id)
-
-                # 학습 시작
-                self._start_training(speaker_id, speaker_name, utterance_count)
+                speakers_to_train.append((speaker_id, speaker_name, utterance_count))
 
             except Exception as e:
                 self.on_status(f"❌ {speaker_id} 학습 체크 실패: {e}")
+
+        # 순차 학습: 한 명씩 완료 후 다음 사람 진행
+        if speakers_to_train:
+            self.on_status(f"📋 총 {len(speakers_to_train)}명의 화자 순차 학습 시작")
+            self._train_speakers_sequentially(speakers_to_train, index=0)
+
+    def _train_speakers_sequentially(self, speakers_to_train: List[tuple], index: int):
+        """
+        화자들을 순차적으로 학습 (재귀함수)
+
+        Args:
+            speakers_to_train: [(speaker_id, speaker_name, utterance_count), ...] 리스트
+            index: 현재 학습할 화자의 인덱스
+        """
+        if index >= len(speakers_to_train):
+            # 모든 화자 학습 완료
+            self.on_status(f"✅ 모든 화자 학습 완료!")
+            return
+
+        speaker_id, speaker_name, utterance_count = speakers_to_train[index]
+        self.on_status(f"🔄 [{index + 1}/{len(speakers_to_train)}] {speaker_name} 학습 시작...")
+
+        # 다음 화자 학습을 위한 콜백 등록
+        def on_next_speaker():
+            self.on_status(f"✅ {speaker_name} 학습 완료! 다음 화자 준비 중...")
+            self._train_speakers_sequentially(speakers_to_train, index + 1)
+
+        # 현재 화자 학습 시작 (완료 시 on_next_speaker 호출)
+        self._start_training_with_callback(speaker_id, speaker_name, utterance_count, on_next_speaker)
+
+    def _start_training_with_callback(self, speaker_id: str, speaker_name: str, utterance_count: int, on_complete_callback):
+        """
+        특정 화자의 QLoRA 학습 시작 (완료 콜백 포함)
+
+        Args:
+            speaker_id: 화자 ID
+            speaker_name: 화자 이름
+            utterance_count: 발언 수
+            on_complete_callback: 학습 완료 시 호출할 콜백 함수
+        """
+        # 이미 학습 중인지 체크
+        if speaker_id in self.training_workers:
+            existing_worker = self.training_workers[speaker_id]
+            if existing_worker.isRunning():
+                self.on_status(f"⚠ {speaker_name} 이미 학습 중")
+                return
+
+        # Worker 생성
+        worker = PersonaTrainingWorker(
+            rag_store=self.rag,
+            speaker_id=speaker_id,
+            speaker_name=speaker_name,
+            min_utterances=self.min_utterances_for_training,
+            num_epochs=3,          # 원래 설정
+            batch_size=4,          # 원래 설정
+        )
+
+        # 시그널 연결
+        worker.sig_status.connect(self._on_training_status)
+        worker.sig_progress.connect(self._on_training_progress)
+        # 완료 시 콜백 함수 먼저 호출 후 기본 처리
+        worker.sig_finished.connect(lambda sid, path: (
+            on_complete_callback(),
+            self._on_training_finished(sid, path)
+        ))
+        worker.sig_error.connect(self._on_training_error)
+
+        # 진행 위젯 표시
+        self.training_progress.reset()
+        self.training_progress.show()
+        self.training_progress.update_status(f"🚀 {speaker_name} 학습 준비 중...")
+
+        # 학습 시작
+        self.training_workers[speaker_id] = worker
+        worker.start()
+
+        self.on_status(f"🧠 {speaker_name} QLoRA 학습 시작 (발언: {utterance_count}개)")
 
     def _start_training(self, speaker_id: str, speaker_name: str, utterance_count: int):
         """
@@ -1821,8 +1934,8 @@ class MeetingConsole(QMainWindow):
             speaker_id=speaker_id,
             speaker_name=speaker_name,
             min_utterances=self.min_utterances_for_training,
-            num_epochs=3,
-            batch_size=4,
+            num_epochs=1,          # 원래 설정
+            batch_size=2,          # 원래 설정
         )
 
         # 시그널 연결
