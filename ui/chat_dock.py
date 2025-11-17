@@ -7,8 +7,8 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import QSize, Qt, QThread, Signal, QObject
 from typing import Optional
 
-from core.llm_router import LLMRouter
-from core.digital_persona import DigitalPersonaManager
+from core.llm import LLMRouter
+from core.persona import DigitalPersonaManager
 
 
 # ========== LLM 비동기 Worker ==========
@@ -17,17 +17,23 @@ class LLMWorker(QObject):
     sig_done = Signal(str)  # 성공 시 응답 텍스트
     sig_error = Signal(str)  # 오류 시 에러 메시지
 
-    def __init__(self, router, backend, prompt, temperature):
+    def __init__(self, router, backend, prompt, temperature, max_new_tokens=None):
         super().__init__()
         self.router = router
         self.backend = backend
         self.prompt = prompt
         self.temperature = temperature
+        self.max_new_tokens = max_new_tokens
 
     def run(self):
         """LLM 호출 실행 (별도 스레드에서)"""
         try:
-            answer = self.router.complete(self.backend, self.prompt, temperature=self.temperature)
+            # max_new_tokens가 설정되었으면 전달 (Kanana 등 지원하는 모델용)
+            kwargs = {"temperature": self.temperature}
+            if self.max_new_tokens is not None:
+                kwargs["max_new_tokens"] = self.max_new_tokens
+
+            answer = self.router.complete(self.backend, self.prompt, **kwargs)
             self.sig_done.emit(answer)
         except Exception as e:
             import traceback
@@ -42,6 +48,7 @@ AVATAR_PATHS = {
     "llama3": ("Llama 3", "resources/llama.png"),
     "A_X-4.0": ("A.(에이닷)", "resources/aidot.png"),
     "Midm-2.0-Mini-Instruct": ("믿:음K 2.0", "resources/mideumk.png"),
+    "kanana": ("카나나", "resources/kanana.png")
 }
 
 def _icon_from(path: str) -> QIcon:
@@ -77,14 +84,18 @@ class ChatDock(QWidget):
     - 중앙: 메시지 리스트(QListWidget, 아이콘 포함)
     - 하단: 입력창 + Send (Enter로도 전송)
     """
-    def __init__(self, rag_store=None, persona_manager: Optional[DigitalPersonaManager] = None, parent=None):
+    def __init__(self, rag_store=None, persona_manager: Optional[DigitalPersonaManager] = None, default_backend: str = "openai:gpt-4o-mini", parent=None):
         super().__init__(parent)
         self.rag_store = rag_store
         self.persona_manager = persona_manager
-        self.router = LLMRouter()
+        self.router = LLMRouter(default_backend=default_backend)
+
+        # AdapterManager 초기화 (Kanana + QLoRA 어댑터)
+        self.router.init_adapter_manager(use_4bit=True)
+
         self.active_persona_id = None  # 현재 선택된 페르소나 speaker_id
         self._system_prompt = "You are a helpful assistant."
-        self._current_backend = "openai:gpt-4o-mini"  # 기본 백엔드
+        self._current_backend = default_backend  # 기본 백엔드 (Settings에서 설정 가능)
         self.setMinimumWidth(360)
 
         # LLM 비동기 처리용
@@ -115,10 +126,12 @@ class ChatDock(QWidget):
         self.view.setUniformItemSizes(False)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setWordWrap(True)
+        # 텍스트 드래그 선택 및 복사 활성화
+        self.view.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         layout.addWidget(self.view, 1)
 
-        # 초기 상태 안내
-        self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
+        # 초기 상태 안내 (주석 처리 - 대답만 표시)
+        # self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
 
         # === 하단: 입력 ===
         sub = QHBoxLayout()
@@ -130,7 +143,15 @@ class ChatDock(QWidget):
         layout.addLayout(sub)
 
         self.btn.clicked.connect(self.on_send)
-        self.edit.returnPressed.connect(self.on_send)
+        # Enter 키는 LLM 처리 중일 때 무시되도록 on_send에서 처리
+        self.edit.returnPressed.connect(self._on_enter_pressed)
+
+    def _on_enter_pressed(self):
+        """Enter 키 입력 처리 (LLM 처리 중이면 무시)"""
+        # LLM 처리 중이면 엔터 키 무시
+        if self.llm_thread and self.llm_thread.isRunning():
+            return
+        self.on_send()
 
     # ---------- 페르소나 관리 ----------
     def load_personas(self):
@@ -152,6 +173,19 @@ class ChatDock(QWidget):
         index = self.cmb_persona.findText(current_text)
         if index >= 0:
             self.cmb_persona.setCurrentIndex(index)
+
+    def set_default_backend(self, backend: str):
+        """
+        기본 LLM 백엔드 설정 (Settings에서 호출)
+
+        Args:
+            backend: 백엔드 ID (예: "openai:gpt-4o-mini")
+        """
+        # 모든 채팅에 Settings의 기본 백엔드 사용
+        self._current_backend = backend
+        self.lbl_backend.setText(backend)
+        # 백엔드 변경 메시지 제거 (대답만 표시)
+        # self._append_status(f"🔧 기본 LLM 백엔드 변경: {backend}")
 
     # ---------- 내부 유틸 ----------
     def _current_backend_key(self) -> str:
@@ -180,6 +214,8 @@ class ChatDock(QWidget):
         # 라벨 + 본문(두 줄)
         text_block = f"{label}\n{text}"
         it = QListWidgetItem(icon, text_block)
+        # 텍스트 선택 가능하게 설정
+        it.setFlags(it.flags() | Qt.ItemFlag.ItemIsSelectable)
         # 대충 높이 가늠(본문 길이에 따라 늘려줌)
         # approx_lines = max(1, len(text) // 38 + 1)
         # it.setSizeHint(QSize(0, 26 + approx_lines * 18))
@@ -190,15 +226,18 @@ class ChatDock(QWidget):
     def on_persona_changed(self, display_text: str):
         """페르소나 선택 변경 시"""
         if display_text.startswith("없음"):
-            # 회사 전체 챗봇
+            # 회사 전체 챗봇 - Settings에서 설정한 기본 백엔드 사용
             self.active_persona_id = None
             self._system_prompt = "You are a helpful assistant."
-            self._current_backend = "openai:gpt-4o-mini"
+            # self._current_backend는 초기화 시 또는 set_default_backend()로 이미 설정됨
             self.lbl_backend.setText(self._current_backend)
-            self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
+            # 어댑터 비활성화
+            self.router.set_active_speaker(None)
+            # 페르소나 변경 메시지 제거 (대답만 표시)
+            # self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
             return
 
-        # 페르소나 선택
+        # 페르소나 선택 - Settings에서 설정한 기본 백엔드 사용
         index = self.cmb_persona.currentIndex()
         speaker_id = self.cmb_persona.itemData(index)
 
@@ -211,12 +250,25 @@ class ChatDock(QWidget):
 
         self.active_persona_id = speaker_id
         self._system_prompt = persona.generate_system_prompt()
-        self._current_backend = persona.llm_backend or "openai:gpt-4o-mini"
+        # 페르소나별 백엔드는 사용하지 않고, Settings의 기본 백엔드 사용
+        # self._current_backend는 그대로 유지 (Settings에서 설정한 값)
         self.lbl_backend.setText(self._current_backend)
 
-        self._append_status(
-            f"🧭 대화 상대: {persona.display_name} | backend: {self._current_backend}"
-        )
+        # QLoRA 어댑터 활성화 (Kanana 모델의 경우)
+        if "kanana" in self._current_backend.lower():
+            self.router.set_active_speaker(speaker_id)
+            adapter_status = ""
+            if self.router.adapter_manager and speaker_id in self.router.adapter_manager.get_loaded_adapters():
+                adapter_status = " (개인화 활성)"
+            print(f"[INFO] Activated personalization for {speaker_id}{adapter_status}")
+        else:
+            # Kanana가 아닌 경우 어댑터 비활성화
+            self.router.set_active_speaker(None)
+
+        # 페르소나 변경 메시지 제거 (대답만 표시)
+        # self._append_status(
+        #     f"🧭 대화 상대: {persona.display_name} | backend: {self._current_backend}"
+        # )
 
     def on_send(self):
         q = self.edit.text().strip()
@@ -252,13 +304,14 @@ class ChatDock(QWidget):
         sys_prompt = self._system_prompt
         backend_label = self._current_backend  # 페르소나 설정에서 가져온 백엔드 사용
 
-        prompt = f"[SYSTEM]\n{sys_prompt}\n\n"
+        # Kanana 모델용 프롬프트 포맷 (단일 턴 생성)
+        prompt = f"{sys_prompt}\n\n"
         if context_block:
-            prompt += f"[CONTEXT]\n{context_block}\n\n"
-        prompt += f"[USER]\n{q}"
+            prompt += f"{context_block}\n\n"
+        prompt += f"사용자: {q}\n어시스턴트: "  # Kanana 채팅 포맷
 
-        # "생각 중..." 메시지 표시
-        self._append_status("🤔 답변 생성 중...")
+        # "생각 중..." 메시지 제거 (대답만 표시)
+        # self._append_status("🤔 답변 생성 중...")
 
         # UI 입력 비활성화
         self.btn.setEnabled(False)
@@ -266,7 +319,8 @@ class ChatDock(QWidget):
 
         # 비동기 LLM 호출
         self.llm_thread = QThread()
-        self.llm_worker = LLMWorker(self.router, backend_label, prompt, temperature=0.3)
+        # Kanana 모델의 경우 max_new_tokens를 명시적으로 제한하여 과도한 생성 방지
+        self.llm_worker = LLMWorker(self.router, backend_label, prompt, temperature=0.3, max_new_tokens=512)
         self.llm_worker.moveToThread(self.llm_thread)
 
         # 시그널 연결
@@ -284,10 +338,10 @@ class ChatDock(QWidget):
         """LLM 응답 성공"""
         backend_key = self._current_backend_key()
 
-        # 응답에 컨텍스트 추가
+        # RAG 컨텍스트 제거 - 대답만 표시
         final_ans = answer
-        if self._current_context:
-            final_ans += f"\n\n---\n{self._current_context}"
+        # if self._current_context:
+        #     final_ans += f"\n\n---\n{self._current_context}"
 
         self._append_message("assistant", final_ans, backend_key=backend_key)
 

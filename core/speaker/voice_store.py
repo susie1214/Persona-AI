@@ -195,15 +195,3 @@ class VoiceStore:
             print(f"[WARN] VoiceStore failed to delete speaker {speaker_id}: {e}")
             return False
 
-    def delete_all_speakers(self):
-        """모든 화자 정보 삭제 (컬렉션 재생성)"""
-        if not self.ok:
-            return
-
-        try:
-            self.client.delete_collection(collection_name=self.collection_name)
-            print(f"[INFO] VoiceStore deleted collection: {self.collection_name}")
-            self._ensure_collection()
-        except Exception as e:
-            print(f"[WARN] VoiceStore failed to delete collection: {e}")
-

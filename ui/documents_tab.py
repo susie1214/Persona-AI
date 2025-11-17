@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 # RAG Store (Qdrant 통합 파이프라인)
-from core.rag_store import RagStore
+from core.rag.rag_store import RagStore
 
 # 업로드 폴더(프로젝트 표준 경로로 고정)
 UPLOAD_DIR = os.path.join("data", "docs", "uploaded")

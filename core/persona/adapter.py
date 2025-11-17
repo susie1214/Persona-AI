@@ -39,7 +39,7 @@ class AdapterManager:
 
         print(f"[INFO] AdapterManager initialized (PEFT available: {self.available})")
 
-    def load_base(self, base_model_id: str = "Qwen/Qwen2.5-3B-Instruct") -> bool:
+    def load_base(self, base_model_id: str = "models/kanana-1.5-2.1b-instruct") -> bool:
         """
         베이스 모델 로드
 
@@ -135,41 +135,96 @@ class AdapterManager:
 
     def load_all_adapters(self, adapters_dir: str = "adapters") -> int:
         """
-        특정 디렉터리의 모든 어댑터 로드
+        사용 가능한 어댑터 목록만 인덱싱 (실제 로드는 필요할 때만)
 
         Args:
             adapters_dir: 어댑터 루트 디렉터리
 
         Returns:
-            로드된 어댑터 수
+            발견된 어댑터 수
         """
         if not os.path.exists(adapters_dir):
             print(f"[WARN] Adapters directory not found: {adapters_dir}")
             return 0
 
         count = 0
+        available_adapters = []
+
         for speaker_id in os.listdir(adapters_dir):
             adapter_path = os.path.join(adapters_dir, speaker_id, "final")
             if os.path.isdir(adapter_path):
-                if self.load_adapter(speaker_id, adapter_path):
+                # 메타데이터 로드 (가벼움)
+                metadata_path = os.path.join(adapter_path, "metadata.json")
+                if os.path.exists(metadata_path):
+                    try:
+                        with open(metadata_path, "r") as f:
+                            self.adapter_metadata[speaker_id] = json.load(f)
+                        available_adapters.append(speaker_id)
+                        count += 1
+                    except Exception as e:
+                        print(f"[WARN] Failed to load metadata for {speaker_id}: {e}")
+                else:
+                    # 메타데이터 없어도 등록
+                    self.adapter_metadata[speaker_id] = {"speaker_id": speaker_id}
+                    available_adapters.append(speaker_id)
                     count += 1
 
-        print(f"[INFO] Loaded {count} adapters")
+        print(f"[INFO] Found {count} available adapters (lazy loading enabled)")
         return count
 
     def set_active(self, speaker_id: Optional[str]):
         """
-        활성 어댑터 설정
+        활성 어댑터 설정 (메모리 최적화: 필요할 때만 로드)
 
         Args:
             speaker_id: 화자 ID (None이면 베이스 모델 사용)
         """
-        if speaker_id and speaker_id not in self.loaded_adapters:
-            print(f"[WARN] Adapter not found: {speaker_id}")
-            self.active_adapter = None
-        else:
+        # 기존 활성 어댑터 언로드 (메모리 절약)
+        if self.active_adapter and self.active_adapter != speaker_id:
+            self.unload_adapter(self.active_adapter)
+
+        if speaker_id:
+            # 요청한 어댑터가 메모리에 없으면 로드
+            if speaker_id not in self.loaded_adapters:
+                adapter_path = os.path.join("adapters", speaker_id, "final")
+                if os.path.exists(adapter_path):
+                    print(f"[INFO] Loading adapter for {speaker_id} on demand...")
+                    if not self.load_adapter(speaker_id, adapter_path):
+                        print(f"[WARN] Failed to load adapter for {speaker_id}")
+                        self.active_adapter = None
+                        return
+                else:
+                    print(f"[WARN] Adapter not found: {adapter_path}")
+                    self.active_adapter = None
+                    return
+
             self.active_adapter = speaker_id
-            print(f"[INFO] Active adapter set to: {speaker_id or 'base'}")
+            print(f"[INFO] Active adapter set to: {speaker_id}")
+        else:
+            self.active_adapter = None
+            print(f"[INFO] Active adapter set to: base model")
+
+    def unload_adapter(self, speaker_id: str):
+        """
+        특정 어댑터 언로드 (메모리 절약)
+
+        Args:
+            speaker_id: 언로드할 어댑터의 화자 ID
+        """
+        if speaker_id in self.loaded_adapters:
+            try:
+                # 메모리에서 제거
+                del self.loaded_adapters[speaker_id]
+                if speaker_id in self.adapter_metadata:
+                    del self.adapter_metadata[speaker_id]
+
+                # GPU 메모리 정리
+                import torch
+                torch.cuda.empty_cache()
+
+                print(f"[INFO] Unloaded adapter: {speaker_id}")
+            except Exception as e:
+                print(f"[WARN] Failed to unload adapter {speaker_id}: {e}")
 
     def generate(
         self,
@@ -190,18 +245,22 @@ class AdapterManager:
         Returns:
             생성된 텍스트
         """
-        if not self.available or self.base_model is None:
-            return "[ERROR] Model not loaded"
+        if not self.available or self.base_model is None or self.tokenizer is None:
+            return "[ERROR] Model or tokenizer not loaded"
+
+        # Type narrowing: after the None check above, we know these are not None
+        tokenizer = self.tokenizer
+        base_model = self.base_model
 
         # 활성 모델 선택
         if self.active_adapter and self.active_adapter in self.loaded_adapters:
             model = self.loaded_adapters[self.active_adapter]
         else:
-            model = self.base_model
+            model = base_model
 
         try:
             # 토크나이징
-            inputs = self.tokenizer(prompt, return_tensors="pt")
+            inputs = tokenizer(prompt, return_tensors="pt")
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
             # 생성
@@ -212,12 +271,12 @@ class AdapterManager:
                     temperature=temperature,
                     top_p=top_p,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
                 )
 
             # 디코딩
-            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
             # 프롬프트 제거 후 답변만 반환
             if prompt in generated_text:

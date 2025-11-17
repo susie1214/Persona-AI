@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from core.speaker import SpeakerManager
-from core.digital_persona import DigitalPersonaManager
+from core.persona import DigitalPersonaManager
 from ui.survey_wizard import DigitalPersonaPriorKnowledgeWizard
 from ui.persona_management import PersonaDetailDialog
 
@@ -77,11 +77,6 @@ class SpeakerPersonaWidget(QWidget):
         self.btn_refresh = QPushButton("🔄 새로고침")
         self.btn_refresh.clicked.connect(self.load_data)
         btn_layout.addWidget(self.btn_refresh)
-
-        self.btn_reset = QPushButton("🗑️ 화자 전체 삭제")
-        self.btn_reset.setStyleSheet("background-color: #fee2e2; color: #991b1b;")
-        self.btn_reset.clicked.connect(self.reset_all_speakers)
-        btn_layout.addWidget(self.btn_reset)
 
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
@@ -281,24 +276,6 @@ class SpeakerPersonaWidget(QWidget):
                     "삭제 실패",
                     f"화자 삭제 중 오류가 발생했습니다:\n{str(e)}"
                 )
-
-    def reset_all_speakers(self):
-        """모든 화자 정보 초기화"""
-        reply = QMessageBox.question(
-            self,
-            "화자 전체 삭제",
-            "모든 화자 정보를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            if self.speaker_manager.reset_all_speakers():
-                self.load_data()
-                self.mapping_changed.emit({})
-                QMessageBox.information(self, "완료", "모든 화자 정보가 삭제되었습니다.")
-            else:
-                QMessageBox.warning(self, "오류", "화자 정보 삭제 중 오류가 발생했습니다.")
 
     def on_persona_updated(self, speaker_id: str):
         """페르소나 업데이트 시 호출"""

@@ -8,9 +8,9 @@ from PySide6.QtWidgets import (
 )
 import os, datetime
 
-from core.offline_meeting import process_audio_file
+from core.analysis.offline import process_audio_file
 
-from core.summarizer import actions_from_segments
+from core.analysis import actions_from_segments
 
 class _SummWorker(QObject):
 
@@ -291,6 +291,14 @@ class MeetingNotesView(QWidget):
             if hasattr(self.main_console.meeting_settings, 'speaker_tab'):
                 self.main_console.meeting_settings.speaker_tab.load_speakers()
                 self.main_console.on_status("✓ 화자 매핑 정보가 업데이트되었습니다.")
+
+        # 파일 처리 완료 후 자동 QLoRA 학습 트리거
+        if self.main_console and segments and hasattr(self.main_console, '_trigger_auto_training'):
+            # 세그먼트에서 화자 ID 추출
+            speaker_ids = list(set(seg.get("speaker") for seg in segments if seg.get("speaker") and seg.get("speaker") != "Unknown"))
+            if speaker_ids:
+                self.main_console._trigger_auto_training(speaker_ids)
+                self.main_console.on_status(f"🧠 QLoRA 학습 시작: {len(speaker_ids)}명의 화자")
 
         QMessageBox.information(self, "완료", "회의록을 생성했습니다.")
 

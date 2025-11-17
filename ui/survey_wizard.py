@@ -25,10 +25,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal
 
 # 디지털 페르소나 관리자
-from core.digital_persona import DigitalPersonaManager
-from core.persona_store import PersonaStore
-from core.rag_store import RagStore
-from core.voice_store import VoiceStore
+from core.persona.digital_persona import DigitalPersonaManager
+from core.persona.persona_store import PersonaStore
+from core.rag.rag_store import RagStore
+from core.speaker.voice_store import VoiceStore
 
 
 class DigitalPersonaPriorKnowledgeWizard(QWizard):
@@ -169,21 +169,12 @@ class DigitalPersonaPriorKnowledgeWizard(QWizard):
         L3.addWidget(QLabel("📚 관심 분야:"))
         L3.addWidget(self.edit_interests)
 
-        # ------- Page 4: LLM 설정 및 동의 -------
+        # ------- Page 4: 추가 정보 및 동의 -------
         self.page_settings = QWizardPage()
-        self.page_settings.setTitle("LLM 설정 및 동의")
+        self.page_settings.setTitle("추가 정보 및 동의")
         L4 = QVBoxLayout(self.page_settings)
 
-        self.cmb_backend = QComboBox()
-        self.cmb_backend.addItems(
-            [
-                "openai:gpt-4o-mini",
-                "openai:gpt-4o",
-                "ollama:llama3",
-                "ax:A.X-4.0",
-                "midm:Midm-2.0-Mini-Instruct",
-            ]
-        )
+        # LLM 백엔드 선택 제거 - Settings 탭에서 전역 설정 사용
 
         self.edit_memo = QTextEdit()
         self.edit_memo.setPlaceholderText(
@@ -193,8 +184,7 @@ class DigitalPersonaPriorKnowledgeWizard(QWizard):
 
         self.chk_consent = QCheckBox("디지털 페르소나 생성 및 학습 목적 데이터 활용에 동의합니다.")
 
-        L4.addWidget(QLabel("🤖 기본 LLM 백엔드:"))
-        L4.addWidget(self.cmb_backend)
+        # LLM 백엔드 위젯 제거
         L4.addWidget(QLabel("📋 추가 메모:"))
         L4.addWidget(self.edit_memo)
         L4.addWidget(QLabel(""))
@@ -237,7 +227,8 @@ class DigitalPersonaPriorKnowledgeWizard(QWizard):
                 "skills": self._split_csv(self.edit_skills.toPlainText()),
                 "interests": self._split_csv(self.edit_interests.toPlainText()),
             },
-            "llm_backend": self.cmb_backend.currentText(),
+            # LLM 백엔드는 Settings 탭에서 전역 설정 사용 (페르소나별 설정 제거)
+            # "llm_backend": self.cmb_backend.currentText(),
             "memo": self.edit_memo.toPlainText().strip(),
         }
 

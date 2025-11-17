@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QApplication
 from ui.meeting_console import MeetingConsole
 from PySide6.QtGui import QIcon
 
-# .env 파일 로드
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -18,7 +17,6 @@ except ImportError:
 except Exception as e:
     print(f"[ERROR] .env 파일 로드 실패: {e}")
 
-# 경고 소음 줄이기
 import warnings
 warnings.filterwarnings("ignore", module="pyannote.audio")
 
@@ -40,7 +38,7 @@ def excepthook(etype, value, tb):
     msg = "".join(traceback.format_exception(etype, value, tb))
     print(msg, file=sys.stderr)
     logging.error("UNCAUGHT EXCEPTION:\n%s", msg)
-    # 창이 그냥 닫히지 않도록 마지막 메시지 출력 대기
+
     try:
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.critical(None, "Fatal Error", msg[:2000])
@@ -52,7 +50,7 @@ sys.excepthook = excepthook
 
 def main():
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("./data/PersonaJK.png"))
+    app.setWindowIcon(QIcon("./resources/PersonaJK.png"))
     
     win = MeetingConsole()
     win.show()
@@ -60,7 +58,6 @@ def main():
     try:
         sys.exit(app.exec())
     except Exception:
-        # Qt 내부 예외도 로그로 남김
         logging.exception("Qt main loop exception")
         raise
 

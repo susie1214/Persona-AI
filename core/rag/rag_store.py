@@ -290,6 +290,34 @@ class RagStore:
             print(f"[WARN] Failed to clear collection: {e}")
             return False
 
+    def clear_all_collections(self):
+        """모든 VectorDB 컬렉션 초기화 (회의 + 문서)"""
+        if not self.ok:
+            return False
+
+        success = True
+
+        # 1. 회의 컬렉션 초기화
+        try:
+            self.client.delete_collection(self.collection)
+            self._ensure_collection(self.collection, self.embed_dim)
+            self._id_seq = 1
+            print(f"[INFO] Cleared collection: {self.collection}")
+        except Exception as e:
+            print(f"[WARN] Failed to clear {self.collection}: {e}")
+            success = False
+
+        # 2. 문서 컬렉션 초기화
+        try:
+            self.client.delete_collection(self.doc_collection)
+            self._ensure_collection(self.doc_collection, self.embed_dim)
+            print(f"[INFO] Cleared collection: {self.doc_collection}")
+        except Exception as e:
+            print(f"[WARN] Failed to clear {self.doc_collection}: {e}")
+            success = False
+
+        return success
+
     # -----------------------------
     # (B) 문서 업로드/검색 (추가)
     # -----------------------------

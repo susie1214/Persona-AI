@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# core/digital_persona.py
+# core/persona/digital_persona.py
 """
 통합 디지털 페르소나 시스템
 - 음성 임베딩 + 발언 이력 + 말투 학습 + 메타데이터 통합
@@ -12,9 +12,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import numpy as np
 
-from core.voice_store import VoiceStore
-from core.rag_store import RagStore
-from core.persona_store import PersonaStore
+from core.speaker import VoiceStore
+from core.rag import RagStore
+from .persona_store import PersonaStore  # 파일명이 persona_store.py 유지
 
 
 @dataclass
@@ -273,11 +273,38 @@ class DigitalPersonaManager:
             print(f"[ERROR] Failed to load persona {speaker_id}: {e}")
             return None
 
+    def _is_valid_utterance(self, text: str, min_words: int = 3) -> bool:
+        """
+        학습 및 RAG에 사용할 유효한 발언인지 확인
+        - 최소 단어 수 기준 (예: "어?", "네" 같은 짧은 발언 제외)
+
+        Args:
+            text: 발언 텍스트
+            min_words: 최소 단어 수 (기본값: 3)
+
+        Returns:
+            유효 여부
+        """
+        if not text or not text.strip():
+            return False
+
+        # 단어 수 계산 (공백 기준)
+        word_count = len(text.strip().split())
+        if word_count < min_words:
+            return False
+
+        return True
+
     def add_utterance(self, speaker_id: str, text: str, start: float, end: float):
-        """발언 추가 (RAG에 저장)"""
+        """발언 추가 (RAG에 저장, 짧은 발언은 필터링)"""
         persona = self.get_persona(speaker_id)
         if not persona:
             print(f"[WARN] Persona not found: {speaker_id}")
+            return
+
+        # 짧은 발언 필터링
+        if not self._is_valid_utterance(text):
+            print(f"[DEBUG] Skipped short utterance: '{text[:30]}...' (speaker: {speaker_id})")
             return
 
         # RAG에 발언 저장
@@ -472,12 +499,25 @@ class DigitalPersonaManager:
         return list(self.personas.values())
 
     def delete_persona(self, speaker_id: str):
-        """페르소나 삭제"""
+        """페르소나 삭제 (QLoRA 어댑터도 함께 삭제)"""
+        import shutil
+
+        # 1. 페르소나 JSON 파일 삭제
         path = os.path.join(self.storage_path, f"{speaker_id}.json")
         if os.path.exists(path):
             os.remove(path)
 
+        # 2. 메모리 캐시에서 제거
         if speaker_id in self.personas:
             del self.personas[speaker_id]
+
+        # 3. QLoRA 어댑터 디렉터리 삭제
+        adapter_dir = os.path.join("adapters", speaker_id)
+        if os.path.exists(adapter_dir):
+            try:
+                shutil.rmtree(adapter_dir)
+                print(f"[INFO] Deleted adapter directory: {adapter_dir}")
+            except Exception as e:
+                print(f"[WARN] Failed to delete adapter directory: {e}")
 
         print(f"[INFO] Deleted persona: {speaker_id}")

@@ -1,9 +1,9 @@
-# core/speaker.py
+# core/speaker/manager.py
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 from datetime import datetime
-from core.voice_store import VoiceStore
+from .voice_store import VoiceStore
 
 @dataclass
 class Speaker:
@@ -181,7 +181,7 @@ class SpeakerManager:
         return [(s.speaker_id, s.display_name, s.embedding_count) for s in self.speakers.values()]
 
     def delete_speaker(self, speaker_id: str) -> bool:
-        """특정 화자 삭제 (페르소나도 함께 삭제)"""
+        """특정 화자 삭제 (페르소나 및 QLoRA 어댑터도 함께 삭제)"""
         if not self.voice_store.ok:
             return False
 
@@ -200,24 +200,25 @@ class SpeakerManager:
                     self.persona_manager.delete_persona(speaker_id)
                     print(f"[INFO] Deleted persona for {speaker_id}")
 
+            # 4. QLoRA 어댑터도 함께 삭제
+            self._delete_adapter(speaker_id)
+
             print(f"[INFO] Deleted speaker: {speaker_id}")
 
         return success
 
-    def reset_all_speakers(self) -> bool:
-        """모든 화자 정보 초기화"""
-        if not self.voice_store.ok:
-            return False
+    def _delete_adapter(self, speaker_id: str):
+        """QLoRA 어댑터 파일 및 디렉터리 삭제"""
+        import os
+        import shutil
 
-        # 1. DB 초기화
-        self.voice_store.delete_all_speakers()
-
-        # 2. 메모리 캐시 초기화
-        self.speakers = {}
-        self.next_speaker_id_num = 1
-
-        print("[INFO] All speakers have been reset.")
-        return True
+        adapter_dir = os.path.join("adapters", speaker_id)
+        if os.path.exists(adapter_dir):
+            try:
+                shutil.rmtree(adapter_dir)
+                print(f"[INFO] Deleted adapter: {adapter_dir}")
+            except Exception as e:
+                print(f"[WARN] Failed to delete adapter {adapter_dir}: {e}")
 
     def reload(self):
         """DB에서 강제로 다시 로드"""
