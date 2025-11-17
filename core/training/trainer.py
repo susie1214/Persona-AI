@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# core/persona_training_worker.py
+# core/training/trainer.py
 """
 QLoRA 페르소나 학습을 백그라운드에서 수행하는 Worker
 회의 종료 시 자동으로 화자별 학습을 진행
@@ -11,7 +11,7 @@ from typing import Optional, Dict
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QWidget, QLabel
 
-from core.training import PersonaDatasetGenerator
+from .dataset import PersonaDatasetGenerator
 from core.rag import RagStore
 
 

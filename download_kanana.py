@@ -69,7 +69,7 @@ if __name__ == "__main__":
         print()
         print("다음 명령으로 모델을 사용할 수 있습니다:")
         print()
-        print("  from core.llm_kanana import KananaLLM")
+        print("  from core.llm.backends.kanana import KananaLLM")
         print("  llm = KananaLLM(use_4bit=True)")
         print("  response = llm.complete('안녕하세요')")
         print()

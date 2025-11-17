@@ -1,8 +1,8 @@
-# core/llm_placeholder.py
+# core/llm/backends/placeholder.py
 # (에이닷/믿음 등 외부 HTTP 모델을 여기에 붙이면 됩니다)
 import requests
 from typing import Dict, Optional
-from .llm_base import LLM
+from ..llm_base import LLM
 
 class HttpLLM(LLM):
     """

@@ -7,7 +7,7 @@ LLM Backend Package
 """
 
 from .router import LLMRouter
-from .base import LLM
+from .llm_base import LLM
 
 __all__ = [
     'LLMRouter',

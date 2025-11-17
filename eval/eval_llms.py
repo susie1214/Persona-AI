@@ -28,9 +28,9 @@ except Exception as e:
 
 # 본 프로젝트 래퍼
 try:
-    from core.llm_openai import OpenAILLM
-    from core.llm_ax import AXLLM
-    from core.llm_midm import MidmLLM
+    from core.llm.backends.openai import OpenAILLM
+    from core.llm.backends.ax import AXLLM
+    from core.llm.backends.midm import MidmLLM
 except Exception as e:
     print("[ERROR] core.* LLM 래퍼 import 실패. 프로젝트 구조/경로를 확인하세요:", e)
     raise

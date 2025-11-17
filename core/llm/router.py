@@ -40,13 +40,13 @@
 #         return m.complete(prompt, temperature=temperature)
 # -*- coding: utf-8 -*-
 from typing import Optional
-from .llm_openai import OpenAILLM
-from .llm_ax import AXLLM
-from .llm_midm import MidmLLM
-from .llm_ollama import OllamaLLM
-from .llm_kanana import KananaLLM
-from .llm_placeholder import HttpLLM
-from .adapter import AdapterManager
+from .backends.openai import OpenAILLM
+from .backends.ax import AXLLM
+from .backends.midm import MidmLLM
+from .backends.ollama import OllamaLLM
+from .backends.kanana import KananaLLM
+from .backends.placeholder import HttpLLM
+from core.persona import AdapterManager
 
 # 사용자 친화적 별칭 → 정식 모델 ID로 보정
 ALIAS = {

@@ -25,10 +25,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal
 
 # 디지털 페르소나 관리자
-from core.digital_persona import DigitalPersonaManager
-from core.persona_store import PersonaStore
-from core.rag_store import RagStore
-from core.voice_store import VoiceStore
+from core.persona.digital_persona import DigitalPersonaManager
+from core.persona.persona_store import PersonaStore
+from core.rag.rag_store import RagStore
+from core.speaker.voice_store import VoiceStore
 
 
 class DigitalPersonaPriorKnowledgeWizard(QWizard):

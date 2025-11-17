@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# core/digital_persona.py
+# core/persona/digital_persona.py
 """
 통합 디지털 페르소나 시스템
 - 음성 임베딩 + 발언 이력 + 말투 학습 + 메타데이터 통합
@@ -14,7 +14,7 @@ import numpy as np
 
 from core.speaker import VoiceStore
 from core.rag import RagStore
-from core.persona import PersonaStore
+from .persona_store import PersonaStore  # 파일명이 persona_store.py 유지
 
 
 @dataclass

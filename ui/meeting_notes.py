@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 import os, datetime
 
-from core.analysis import process_audio_file
+from core.analysis.offline import process_audio_file
 
 from core.analysis import actions_from_segments
 

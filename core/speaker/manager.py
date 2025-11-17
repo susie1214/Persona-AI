@@ -1,9 +1,9 @@
-# core/speaker.py
+# core/speaker/manager.py
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 from datetime import datetime
-from core.speaker import VoiceStore
+from .voice_store import VoiceStore
 
 @dataclass
 class Speaker:
