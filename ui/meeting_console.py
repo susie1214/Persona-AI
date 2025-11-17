@@ -526,7 +526,7 @@ class MeetingConsole(QMainWindow):
         self.min_utterances_for_training = 20  # 학습 최소 발언 수
 
         # LLM 백엔드 설정
-        self.default_llm_backend = "kanana:kakaocorp/kanana-1.5-2.1b-instruct"  # 기본 LLM 백엔드
+        self.default_llm_backend = "kanana:kakao/kanana-1.5-2.1b-instruct"  # 기본 LLM 백엔드
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -1027,7 +1027,7 @@ class MeetingConsole(QMainWindow):
             ("OpenAI GPT-4o-mini", "openai:gpt-4o-mini"),
             ("A.X-4.0 (4-bit)", "ax:skt/A.X-4.0"),
             ("Midm-2.0-Mini (4-bit)", "midm:K-intelligence/Midm-2.0-Mini-Instruct"),
-            ("Kanana-1.5-2.1b (4-bit)", "kanana:kakaocorp/kanana-1.5-2.1b-instruct"),
+            ("Kanana-1.5-2.1b (4-bit)", "kanana:kakao/kanana-1.5-2.1b-instruct"),
             ("Ollama Llama3", "ollama:llama3"),
         ]
 

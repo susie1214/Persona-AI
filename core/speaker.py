@@ -181,7 +181,7 @@ class SpeakerManager:
         return [(s.speaker_id, s.display_name, s.embedding_count) for s in self.speakers.values()]
 
     def delete_speaker(self, speaker_id: str) -> bool:
-        """특정 화자 삭제 (페르소나도 함께 삭제)"""
+        """특정 화자 삭제 (페르소나 및 QLoRA 어댑터도 함께 삭제)"""
         if not self.voice_store.ok:
             return False
 
@@ -200,9 +200,25 @@ class SpeakerManager:
                     self.persona_manager.delete_persona(speaker_id)
                     print(f"[INFO] Deleted persona for {speaker_id}")
 
+            # 4. QLoRA 어댑터도 함께 삭제
+            self._delete_adapter(speaker_id)
+
             print(f"[INFO] Deleted speaker: {speaker_id}")
 
         return success
+
+    def _delete_adapter(self, speaker_id: str):
+        """QLoRA 어댑터 파일 및 디렉터리 삭제"""
+        import os
+        import shutil
+
+        adapter_dir = os.path.join("adapters", speaker_id)
+        if os.path.exists(adapter_dir):
+            try:
+                shutil.rmtree(adapter_dir)
+                print(f"[INFO] Deleted adapter: {adapter_dir}")
+            except Exception as e:
+                print(f"[WARN] Failed to delete adapter {adapter_dir}: {e}")
 
     def reload(self):
         """DB에서 강제로 다시 로드"""

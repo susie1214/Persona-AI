@@ -48,8 +48,8 @@ class PersonaTrainingConfig:
     target_modules: list = field(default_factory=lambda: ["q_proj", "v_proj", "k_proj", "o_proj"])
 
     # 학습 설정
-    num_epochs: int = 3         # 3 에포크 (원래 설정)
-    batch_size: int = 4         # 배치 크기 4 (원래 설정)
+    num_epochs: int = 2         # 3 에포크 (원래 설정)
+    batch_size: int = 2         # 배치 크기 4 (원래 설정)
     gradient_accumulation_steps: int = 4
     learning_rate: float = 2e-4
     warmup_steps: int = 10

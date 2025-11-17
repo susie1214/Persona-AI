@@ -88,7 +88,11 @@ class ChatDock(QWidget):
         super().__init__(parent)
         self.rag_store = rag_store
         self.persona_manager = persona_manager
-        self.router = LLMRouter()
+        self.router = LLMRouter(default_backend=default_backend)
+
+        # AdapterManager 초기화 (Kanana + QLoRA 어댑터)
+        self.router.init_adapter_manager(use_4bit=True)
+
         self.active_persona_id = None  # 현재 선택된 페르소나 speaker_id
         self._system_prompt = "You are a helpful assistant."
         self._current_backend = default_backend  # 기본 백엔드 (Settings에서 설정 가능)
@@ -227,6 +231,8 @@ class ChatDock(QWidget):
             self._system_prompt = "You are a helpful assistant."
             # self._current_backend는 초기화 시 또는 set_default_backend()로 이미 설정됨
             self.lbl_backend.setText(self._current_backend)
+            # 어댑터 비활성화
+            self.router.set_active_speaker(None)
             # 페르소나 변경 메시지 제거 (대답만 표시)
             # self._append_status(f"🧭 대화 상대: 없음 (회사 전체 챗봇) | backend: {self._current_backend}")
             return
@@ -247,6 +253,17 @@ class ChatDock(QWidget):
         # 페르소나별 백엔드는 사용하지 않고, Settings의 기본 백엔드 사용
         # self._current_backend는 그대로 유지 (Settings에서 설정한 값)
         self.lbl_backend.setText(self._current_backend)
+
+        # QLoRA 어댑터 활성화 (Kanana 모델의 경우)
+        if "kanana" in self._current_backend.lower():
+            self.router.set_active_speaker(speaker_id)
+            adapter_status = ""
+            if self.router.adapter_manager and speaker_id in self.router.adapter_manager.get_loaded_adapters():
+                adapter_status = " (개인화 활성)"
+            print(f"[INFO] Activated personalization for {speaker_id}{adapter_status}")
+        else:
+            # Kanana가 아닌 경우 어댑터 비활성화
+            self.router.set_active_speaker(None)
 
         # 페르소나 변경 메시지 제거 (대답만 표시)
         # self._append_status(

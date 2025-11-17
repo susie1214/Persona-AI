@@ -244,8 +244,8 @@ class UploadMinutesWidget(QWidget):
             print("[WARN] RAG Store 없음 - 학습 불가")
             return
 
-        # 세그먼트에서 화자 ID 추출
-        speaker_ids = list(set(seg.get("speaker") for seg in segments if seg.get("speaker") and seg.get("speaker") != "Unknown"))
+        # 세그먼트에서 화자 ID 추출 (speaker_id 사용, 없으면 speaker로 fallback)
+        speaker_ids = list(set(seg.get("speaker_id") or seg.get("speaker") for seg in segments if (seg.get("speaker_id") or seg.get("speaker")) and (seg.get("speaker_id") or seg.get("speaker")) != "Unknown"))
 
         if not speaker_ids:
             print("[WARN] 식별된 화자가 없음 - 학습 건너뜀")
