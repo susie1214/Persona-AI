@@ -19,19 +19,19 @@ from ui.meeting_notes import MeetingNotesView
 from ui.meeting_settings import MeetingSettingsWidget
 from ui.documents_tab import DocumentsTab
 from core.audio import AudioWorker, Segment, MeetingState, fmt_time, now_str
-from core.diarization import DiarizationWorker
-from core.summarizer import (
+from core.audio import DiarizationWorker
+from core.analysis import (
     render_summary_html_from_segments, actions_from_segments,
     render_actions_table_html, extract_agenda, llm_summarize,
     extract_schedules_from_summary,
 )
-from core.rag_store import RagStore
-from core.adapter import AdapterManager
+from core.rag import RagStore
+from core.persona import AdapterManager
 from core.speaker import SpeakerManager
-from core.digital_persona import DigitalPersonaManager
-from core.persona_store import PersonaStore
-from core.voice_store import VoiceStore
-from core.persona_training_worker import PersonaTrainingWorker, TrainingProgressWidget
+from core.persona import DigitalPersonaManager
+from core.persona import PersonaStore
+from core.speaker import VoiceStore
+from core.training import PersonaTrainingWorker, TrainingProgressWidget
 import numpy as np
 from core.schedule_store import Schedule as JSONSchedule, save_schedule as json_save, list_month as json_list_month, new_id as json_new_id
 

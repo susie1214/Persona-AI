@@ -6,8 +6,8 @@ Speaker Management Package
 화자 식별, 프로필 관리, 음성 임베딩 저장소
 """
 
-from ..speaker import Speaker, SpeakerManager
-from ..voice_store import VoiceStore
+from .manager import Speaker, SpeakerManager
+from .voice_store import VoiceStore
 
 __all__ = [
     'Speaker',

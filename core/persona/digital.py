@@ -12,9 +12,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import numpy as np
 
-from core.voice_store import VoiceStore
-from core.rag_store import RagStore
-from core.persona_store import PersonaStore
+from core.speaker import VoiceStore
+from core.rag import RagStore
+from core.persona import PersonaStore
 
 
 @dataclass

@@ -7,8 +7,8 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import QSize, Qt, QThread, Signal, QObject
 from typing import Optional
 
-from core.llm_router import LLMRouter
-from core.digital_persona import DigitalPersonaManager
+from core.llm import LLMRouter
+from core.persona import DigitalPersonaManager
 
 
 # ========== LLM 비동기 Worker ==========

@@ -4,8 +4,8 @@ from PySide6.QtWidgets import (
     QTextEdit, QHBoxLayout, QMessageBox, QLineEdit
 )
 from PySide6.QtCore import Qt, Signal, QObject, QThread
-from core.offline_meeting import process_audio_file
-from core.notes_export import save_markdown, save_html, start_share_server
+from core.analysis import process_audio_file
+from core.analysis import save_markdown, save_html, start_share_server
 import os, webbrowser, datetime
 from ui.meeting_settings import MeetingSettingsWidget
 from typing import Optional
@@ -207,7 +207,7 @@ class UploadMinutesWidget(QWidget):
         fn = f"minutes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         path, _ = QFileDialog.getSaveFileName(self, "HTML 저장", fn, "HTML (*.html)")
         if not path: return
-        from core.notes_export import save_html
+        from core.analysis import save_html
         self._last_html_path = save_html(self._last_result["markdown"], path, title=self._last_result["title"])
         QMessageBox.information(self, "저장됨", f"저장 위치:\n{self._last_html_path}")
 
@@ -321,7 +321,7 @@ class UploadMinutesWidget(QWidget):
             utterance_count: 발언 수
             on_complete_callback: 학습 완료 시 호출할 콜백 함수
         """
-        from core.persona_training_worker import PersonaTrainingWorker
+        from core.training import PersonaTrainingWorker
 
         # 이미 학습 중인지 체크
         if speaker_id in self.training_workers:
@@ -365,7 +365,7 @@ class UploadMinutesWidget(QWidget):
             speaker_name: 화자 이름
             utterance_count: 발언 수
         """
-        from core.persona_training_worker import PersonaTrainingWorker
+        from core.training import PersonaTrainingWorker
 
         # 이미 학습 중인지 체크
         if speaker_id in self.training_workers:

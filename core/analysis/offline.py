@@ -186,7 +186,7 @@ def _md_from_segments(title: str, segs: List[Dict], use_llm_summary: bool = Fals
     if use_llm_summary:
         print("[INFO] Generating LLM-based summary...")
         # Dict를 Segment 객체로 변환
-        from core.summarizer import llm_summarize
+        from core.analysis import llm_summarize
         segment_objects = [_dict_to_segment(s) for s in segs]
         summary += llm_summarize(segment_objects, backend=llm_backend)
     else:

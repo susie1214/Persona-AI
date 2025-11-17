@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from core.digital_persona import DigitalPersonaManager
+from core.persona import DigitalPersonaManager
 from core.speaker import SpeakerManager
 from ui.survey_wizard import DigitalPersonaPriorKnowledgeWizard
 

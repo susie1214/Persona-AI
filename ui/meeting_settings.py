@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from typing import Optional
 from core.speaker import SpeakerManager
-from core.digital_persona import DigitalPersonaManager
+from core.persona import DigitalPersonaManager
 
 TEMPLATES = [
     ("일반 회의", "general"),

@@ -3,7 +3,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 from datetime import datetime
-from core.voice_store import VoiceStore
+from core.speaker import VoiceStore
 
 @dataclass
 class Speaker:

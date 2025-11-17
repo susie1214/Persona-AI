@@ -11,8 +11,8 @@ from typing import Optional, Dict
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QWidget, QLabel
 
-from core.persona_training import PersonaDatasetGenerator
-from core.rag_store import RagStore
+from core.training import PersonaDatasetGenerator
+from core.rag import RagStore
 
 
 class PersonaTrainingWorker(QThread):

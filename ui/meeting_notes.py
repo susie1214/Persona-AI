@@ -8,9 +8,9 @@ from PySide6.QtWidgets import (
 )
 import os, datetime
 
-from core.offline_meeting import process_audio_file
+from core.analysis import process_audio_file
 
-from core.summarizer import actions_from_segments
+from core.analysis import actions_from_segments
 
 class _SummWorker(QObject):
 
