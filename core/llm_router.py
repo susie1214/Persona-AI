@@ -45,6 +45,8 @@ from .llm_ax import AXLLM
 from .llm_midm import MidmLLM
 from .llm_ollama import OllamaLLM
 from .llm_placeholder import HttpLLM
+from .llm_kanana import KananaLLM
+
 
 # 사용자 친화적 별칭 → 정식 모델 ID로 보정
 ALIAS = {
@@ -53,6 +55,8 @@ ALIAS = {
     "midm-mini": "K-Intelligence/Midm-2.0-Mini-Instruct",
     # Ollama 예시
     "llama3": "llama3",
+    "kanana": "kakaocorp/kanana-1.5-v-3b-instruct",
+    "kanana-1.5": "kakaocorp/kanana-1.5-v-3b-instruct",
 }
 
 def _normalize(name: str) -> str:
@@ -86,6 +90,10 @@ class LLMRouter:
             return MidmLLM(model)
         if prov == "http":
             return HttpLLM(name, endpoint="http://localhost:8000/chat")
+        if prov == "kanana":
+            # model: 로컬 경로 또는 허깅페이스 모델 ID
+            model_path = model or "C:/models/kanana-1.5-v-3b-instruct"
+            return KananaLLM(model_id_or_path=model_path)
         # fallback
         return OpenAILLM("gpt-4o-mini")
 
