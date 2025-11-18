@@ -2,61 +2,61 @@
 # core/persona/digital_persona.py
 """
 통합 디지털 페르소나 시스템
-- 음성 임베딩 + 발언 이력 + 말투 학습 + 메타데이터 통합
+- 음성 임베딩 + 발언 이력 + 말투 패턴 + 사전 설문 정보
+- speaker_id 하나로 PersonaStore(설문) + DigitalPersona(이력)를 연결
 """
 
 import json
 import os
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import List, Optional, Dict, Any
+
 import numpy as np
 
 from core.speaker import VoiceStore
 from core.rag import RagStore
-from .persona_store import PersonaStore  # 파일명이 persona_store.py 유지
+from .persona_store import PersonaStore  # core/persona/persona_store.py
 
 
+# ----------------------------------------------------------------------
+# 디지털 페르소나 데이터 모델
+# ----------------------------------------------------------------------
 @dataclass
 class DigitalPersona:
     """
-    확장된 디지털 페르소나 모델
-    화자의 모든 정보를 통합 관리
+    화자 1명에 대한 통합 프로필
+    - speaker_id = 설문/프로필 키 = QLoRA 어댑터 키
     """
+
     # 기본 식별 정보
-    speaker_id: str
-    display_name: str
+    speaker_id: str              # 예: "speaker_01"
+    display_name: str            # 화면에 보여줄 이름
 
     # 음성 특징
     voice_embedding: Optional[np.ndarray] = None
-    embedding_quality: float = 0.0  # 임베딩 신뢰도 (0-1)
+    embedding_quality: float = 0.0  # 0~1 신뢰도
 
-    # 역할 및 전문성
-    role: str = ""  # 예: "팀장", "개발자", "디자이너"
+    # 역할/전문성
+    role: str = ""               # "팀장", "개발자" 등
     department: str = ""
-    expertise: List[str] = field(default_factory=list)  # ["AI", "백엔드", "인프라"]
+    expertise: List[str] = field(default_factory=list)
 
-    # 성격 및 소통 스타일
-    personality_keywords: List[str] = field(default_factory=list)  # ["꼼꼼한", "직설적", "유머러스"]
-    communication_style: Dict[str, Any] = field(default_factory=dict)  # {"tone": "정중", "format": "개조식"}
+    # 성격 및 커뮤니케이션 스타일
+    personality_keywords: List[str] = field(default_factory=list)
+    communication_style: Dict[str, Any] = field(default_factory=dict)
 
-    # 말투 패턴
+    # 말투 패턴 (자동 분석 결과)
     speech_patterns: Dict[str, Any] = field(default_factory=dict)
-    # {
-    #     "common_phrases": ["그래서 말씀드리자면", "제 생각에는"],
-    #     "sentence_endings": ["-습니다", "-죠"],
-    #     "vocab_complexity": "medium",
-    #     "avg_sentence_length": 15
-    # }
 
     # 학습된 모델
-    qlora_adapter_path: Optional[str] = None  # LoRA 어댑터 경로
-    llm_backend: str = "openai:gpt-4o-mini"  # 선호 LLM
+    qlora_adapter_path: Optional[str] = None
+    llm_backend: str = "kanana:kakao/kanana-1.5-2.1b-instruct"
 
     # RAG 컬렉션
-    personal_collection: Optional[str] = None  # 개인 발언 전용 컬렉션
-    utterance_count: int = 0  # 총 발언 수
-    meeting_count: int = 0  # 참여한 회의 횟수 (녹음 시작->종료 기준)
+    personal_collection: Optional[str] = None
+    utterance_count: int = 0
+    meeting_count: int = 0
 
     # 메타데이터
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -64,79 +64,62 @@ class DigitalPersona:
     last_interaction: Optional[str] = None
     interaction_count: int = 0
 
-    # 사전 지식 (manual input)
+    # 수동 입력 사전 지식
     prior_knowledge: Dict[str, Any] = field(default_factory=dict)
-    # {
-    #     "education": "컴퓨터공학 학사",
-    #     "career_years": 5,
-    #     "projects": ["프로젝트A", "프로젝트B"],
-    #     "skills": ["Python", "React"],
-    #     "interests": ["ML/AI", "클라우드"]
-    # }
 
-    def to_dict(self) -> Dict:
-        """직렬화 (numpy array 제외)"""
-        d = asdict(self)
-        # numpy array는 리스트로 변환
+    # --------------------------------------------------------------
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON 직렬화용 dict (numpy -> list 변환 포함)"""
+        data = asdict(self)
         if self.voice_embedding is not None:
-            d['voice_embedding'] = self.voice_embedding.tolist()
-        return d
+            data["voice_embedding"] = self.voice_embedding.tolist()
+        return data
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'DigitalPersona':
-        """역직렬화"""
-        # voice_embedding을 numpy array로 복원
-        if 'voice_embedding' in data and data['voice_embedding'] is not None:
-            data['voice_embedding'] = np.array(data['voice_embedding'])
+    def from_dict(cls, data: Dict[str, Any]) -> "DigitalPersona":
+        """JSON 역직렬화"""
+        ve = data.get("voice_embedding")
+        if ve is not None:
+            data["voice_embedding"] = np.array(ve)
         return cls(**data)
 
+    # --------------------------------------------------------------
     def generate_system_prompt(self) -> str:
-        """페르소나 기반 동적 시스템 프롬프트 생성 (학습된 패턴 반영)"""
-        parts = []
+        """
+        이력 기반 동적 시스템 프롬프트
+        (PersonaStore의 설문 프롬프트와 합쳐져서 최종 system prompt가 됨)
+        """
+        parts: List[str] = []
 
-        # 기본 역할
         parts.append(f"당신은 '{self.display_name}'의 디지털 페르소나입니다.")
 
         if self.role:
             parts.append(f"역할: {self.role}")
-
         if self.department:
             parts.append(f"소속: {self.department}")
-
-        # 전문성
         if self.expertise:
-            expertise_str = ", ".join(self.expertise)
-            parts.append(f"전문 분야: {expertise_str}")
-
-        # 성격
+            parts.append("전문 분야: " + ", ".join(self.expertise))
         if self.personality_keywords:
-            personality_str = ", ".join(self.personality_keywords)
-            parts.append(f"성격 특징: {personality_str}")
+            parts.append("성격 특징: " + ", ".join(self.personality_keywords))
 
-        # 말투 스타일 (초기 설문조사)
         if self.communication_style:
-            tone = self.communication_style.get('tone', '명확')
-            format_style = self.communication_style.get('format', '서술식')
-            parts.append(f"기본 말투: {tone}하고 {format_style}으로 답변합니다.")
+            tone = self.communication_style.get("tone", "명확")
+            fmt = self.communication_style.get("format", "서술식")
+            parts.append(f"기본 말투: {tone}하고 {fmt}으로 답변합니다.")
 
-        # 학습된 말투 패턴 (3회 이상 회의 참여 시 반영)
+        # 말투 패턴은 회의가 어느 정도 누적되었을 때만 사용
         if self.speech_patterns and self.meeting_count >= 3:
             parts.append("\n[학습된 말투 특징]")
 
-            # 자주 사용하는 표현
-            if 'common_phrases' in self.speech_patterns:
-                phrases = self.speech_patterns['common_phrases'][:3]
-                if phrases:
-                    parts.append(f"자주 사용하는 표현: {', '.join(phrases)}")
+            phrases = self.speech_patterns.get("common_phrases", [])[:3]
+            if phrases:
+                parts.append("자주 사용하는 표현: " + ", ".join(phrases))
 
-            # 문장 끝 표현
-            if 'sentence_endings' in self.speech_patterns:
-                endings = self.speech_patterns['sentence_endings'][:3]
-                if endings:
-                    parts.append(f"문장 끝 표현: {', '.join(endings)}")
+            endings = self.speech_patterns.get("sentence_endings", [])[:3]
+            if endings:
+                parts.append("문장 끝 표현: " + ", ".join(endings))
 
-            # 발언 통계
-            avg_words = self.speech_patterns.get('avg_words_per_utterance', 0)
+            avg_words = self.speech_patterns.get("avg_words_per_utterance", 0)
             if avg_words > 0:
                 if avg_words < 10:
                     parts.append("답변 스타일: 간결하고 핵심만 전달")
@@ -145,10 +128,8 @@ class DigitalPersona:
                 else:
                     parts.append("답변 스타일: 상세하고 구체적으로 설명")
 
-        # 종합
         system_prompt = "\n".join(parts)
 
-        # 기본 가이드라인 추가
         if self.meeting_count >= 3:
             system_prompt += "\n\n답변 시 위의 학습된 말투 특징을 최대한 반영하여, 이 사람처럼 자연스럽게 대화하세요."
         else:
@@ -157,18 +138,23 @@ class DigitalPersona:
         return system_prompt
 
     def update_interaction(self):
-        """상호작용 기록 업데이트"""
         self.interaction_count += 1
-        self.last_interaction = datetime.now().isoformat()
-        self.updated_at = datetime.now().isoformat()
+        now = datetime.now().isoformat()
+        self.last_interaction = now
+        self.updated_at = now
 
 
+# ----------------------------------------------------------------------
+# 디지털 페르소나 매니저
+# ----------------------------------------------------------------------
 class DigitalPersonaManager:
     """
-    디지털 페르소나 통합 관리자
-    - VoiceStore, RagStore, PersonaStore 통합
-    - 페르소나 CRUD
-    - 자동 학습 및 업데이트
+    VoiceStore, RagStore, PersonaStore와 연동되는 디지털 페르소나 통합 관리자
+
+    - speaker_id 기준으로:
+        * PersonaStore: 설문/선호(정적 프로필)
+        * DigitalPersona: 음성 + 회의 이력(동적 프로필)
+        * adapters/speaker_id: QLoRA 어댑터
     """
 
     def __init__(
@@ -176,46 +162,48 @@ class DigitalPersonaManager:
         voice_store: Optional[VoiceStore] = None,
         rag_store: Optional[RagStore] = None,
         persona_store: Optional[PersonaStore] = None,
-        storage_path: str = "data/personas"
+        storage_path: str = "data/personas",
     ):
         self.voice_store = voice_store or VoiceStore()
         self.rag_store = rag_store or RagStore()
         self.persona_store = persona_store or PersonaStore()
         self.storage_path = storage_path
-        os.makedirs(storage_path, exist_ok=True)
 
-        # 메모리 캐시
+        os.makedirs(self.storage_path, exist_ok=True)
+
+        # 캐시: speaker_id -> DigitalPersona
         self.personas: Dict[str, DigitalPersona] = {}
 
-        # 기존 페르소나 로드
         self._load_all()
 
+    # --------------------------------------------------------------
     def _load_all(self):
-        """저장된 모든 페르소나 로드"""
+        """storage_path 아래 *.json 로드"""
         if not os.path.exists(self.storage_path):
             return
 
-        for filename in os.listdir(self.storage_path):
-            if filename.endswith('.json'):
-                speaker_id = filename[:-5]  # .json 제거
-                self.load_persona(speaker_id)
+        for fname in os.listdir(self.storage_path):
+            if fname.endswith(".json"):
+                sid = fname[:-5]
+                self.load_persona(sid)
 
     def create_persona(
         self,
         speaker_id: str,
         display_name: str,
         voice_embedding: Optional[np.ndarray] = None,
-        **kwargs
+        **kwargs,
     ) -> DigitalPersona:
-        """새 페르소나 생성"""
+        """
+        새 디지털 페르소나 생성
+        - speaker_id = 설문, 어댑터, RAG 컬렉션 키
+        """
         persona = DigitalPersona(
             speaker_id=speaker_id,
             display_name=display_name,
             voice_embedding=voice_embedding,
-            **kwargs
+            **kwargs,
         )
-
-        # RAG 개인 컬렉션 생성
         persona.personal_collection = f"speaker_{speaker_id}_utterances"
 
         self.personas[speaker_id] = persona
@@ -225,15 +213,42 @@ class DigitalPersonaManager:
         return persona
 
     def get_persona(self, speaker_id: str) -> Optional[DigitalPersona]:
-        """페르소나 조회"""
         if speaker_id in self.personas:
             return self.personas[speaker_id]
-
-        # 메모리에 없으면 로드 시도
         return self.load_persona(speaker_id)
 
+    def save_persona(self, speaker_id: str):
+        persona = self.personas.get(speaker_id)
+        if not persona:
+            return
+        path = os.path.join(self.storage_path, f"{speaker_id}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(persona.to_dict(), f, ensure_ascii=False, indent=2)
+
+    def load_persona(self, speaker_id: str) -> Optional[DigitalPersona]:
+        path = os.path.join(self.storage_path, f"{speaker_id}.json")
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            persona = DigitalPersona.from_dict(data)
+            self.personas[speaker_id] = persona
+            return persona
+        except Exception as e:
+            print(f"[ERROR] Failed to load persona {speaker_id}: {e}")
+            return None
+
+    # --------------------------------------------------------------
+    # 기존 코드 호환용: update_persona
+    # --------------------------------------------------------------
     def update_persona(self, speaker_id: str, **updates):
-        """페르소나 정보 업데이트"""
+        """
+        기존 UI/매니저에서 사용하는 업데이트용 메서드.
+        예: update_persona(speaker_id, display_name="새 이름")
+
+        존재하는 필드만 setattr 하고, updated_at을 갱신한 뒤 저장한다.
+        """
         persona = self.get_persona(speaker_id)
         if not persona:
             print(f"[WARN] Persona not found: {speaker_id}")
@@ -246,244 +261,161 @@ class DigitalPersonaManager:
         persona.updated_at = datetime.now().isoformat()
         self.save_persona(speaker_id)
 
-    def save_persona(self, speaker_id: str):
-        """페르소나 저장"""
-        persona = self.personas.get(speaker_id)
-        if not persona:
-            return
-
-        path = os.path.join(self.storage_path, f"{speaker_id}.json")
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(persona.to_dict(), f, ensure_ascii=False, indent=2)
-
-    def load_persona(self, speaker_id: str) -> Optional[DigitalPersona]:
-        """페르소나 로드"""
-        path = os.path.join(self.storage_path, f"{speaker_id}.json")
-        if not os.path.exists(path):
-            return None
-
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-
-            persona = DigitalPersona.from_dict(data)
-            self.personas[speaker_id] = persona
-            return persona
-        except Exception as e:
-            print(f"[ERROR] Failed to load persona {speaker_id}: {e}")
-            return None
-
+    # --------------------------------------------------------------
+    # 발언/RAG 연동
+    # --------------------------------------------------------------
     def _is_valid_utterance(self, text: str, min_words: int = 3) -> bool:
-        """
-        학습 및 RAG에 사용할 유효한 발언인지 확인
-        - 최소 단어 수 기준 (예: "어?", "네" 같은 짧은 발언 제외)
-
-        Args:
-            text: 발언 텍스트
-            min_words: 최소 단어 수 (기본값: 3)
-
-        Returns:
-            유효 여부
-        """
         if not text or not text.strip():
             return False
-
-        # 단어 수 계산 (공백 기준)
-        word_count = len(text.strip().split())
-        if word_count < min_words:
+        if len(text.strip().split()) < min_words:
             return False
-
         return True
 
     def add_utterance(self, speaker_id: str, text: str, start: float, end: float):
-        """발언 추가 (RAG에 저장, 짧은 발언은 필터링)"""
         persona = self.get_persona(speaker_id)
         if not persona:
             print(f"[WARN] Persona not found: {speaker_id}")
             return
 
-        # 짧은 발언 필터링
         if not self._is_valid_utterance(text):
             print(f"[DEBUG] Skipped short utterance: '{text[:30]}...' (speaker: {speaker_id})")
             return
 
-        # RAG에 발언 저장
-        segments = [{
-            'speaker_id': speaker_id,
-            'speaker_name': persona.display_name,
-            'text': text,
-            'start': start,
-            'end': end,
-        }]
-
+        segments = [
+            {
+                "speaker_id": speaker_id,
+                "speaker_name": persona.display_name,
+                "text": text,
+                "start": start,
+                "end": end,
+            }
+        ]
         self.rag_store.upsert_segments(segments)
 
-        # 발언 수 증가
         persona.utterance_count += 1
         persona.updated_at = datetime.now().isoformat()
-
         self.save_persona(speaker_id)
 
     def on_meeting_ended(self, speaker_ids: List[str]):
         """
-        회의 종료 시 호출 (녹음 종료)
-        참여한 모든 화자의 meeting_count 증가 + 3회마다 자동 학습
+        회의 녹음 종료 시 호출
+        - meeting_count 증가
+        - 3회마다 말투 패턴 자동 업데이트
         """
-        for speaker_id in speaker_ids:
-            persona = self.get_persona(speaker_id)
+        for sid in speaker_ids:
+            persona = self.get_persona(sid)
             if not persona:
                 continue
 
-            # 회의 횟수 증가
             persona.meeting_count += 1
             persona.updated_at = datetime.now().isoformat()
+            print(f"[INFO] Meeting ended for {sid} (#{persona.meeting_count})")
 
-            print(f"[INFO] Meeting ended for {speaker_id} (meeting #{persona.meeting_count})")
-
-            # 3회 회의마다 자동 말투 패턴 업데이트
             if persona.meeting_count > 0 and persona.meeting_count % 3 == 0:
-                print(f"[INFO] Auto-updating speech patterns for {speaker_id} (meeting #{persona.meeting_count})")
-                self.auto_update_speech_patterns(speaker_id)
+                print(f"[INFO] Auto-updating speech patterns for {sid}")
+                self.auto_update_speech_patterns(sid)
 
-            self.save_persona(speaker_id)
+            self.save_persona(sid)
 
+    # --------------------------------------------------------------
+    # 설문/사전지식 연동
+    # --------------------------------------------------------------
     def enrich_from_prior_knowledge(
         self,
         speaker_id: str,
-        prior_knowledge: Dict[str, Any]
+        prior_knowledge: Dict[str, Any],
     ) -> bool:
         """
-        사전 지식 추가 (페르소나가 없으면 자동 생성)
-
-        Args:
-            speaker_id: 화자 ID
-            prior_knowledge: {
-                "role": "시니어 개발자",
-                "department": "AI팀",
-                "expertise": ["Python", "ML", "백엔드"],
-                "personality_keywords": ["분석적", "논리적", "협력적"],
-                "education": "컴퓨터공학 석사",
-                "career_years": 8,
-                ...
-            }
-
-        Returns:
-            bool: 성공 여부
+        prior_knowledge를 DigitalPersona에 병합
+        (필요 시 새 persona 자동 생성)
         """
         persona = self.get_persona(speaker_id)
-
-        # 페르소나가 없으면 자동 생성 (음성 임베딩 없이)
         if not persona:
             print(f"[INFO] Persona not found for {speaker_id}, creating new one...")
-
-            # display_name 추출 (prior_knowledge에서 또는 기본값)
-            display_name = prior_knowledge.get('display_name', speaker_id)
-
-            # 음성 임베딩 없이 페르소나 생성
+            display_name = prior_knowledge.get("display_name", speaker_id)
             persona = DigitalPersona(
                 speaker_id=speaker_id,
                 display_name=display_name,
                 voice_embedding=None,
                 embedding_quality=0.0,
-                llm_backend=prior_knowledge.get('llm_backend', 'openai:gpt-4o-mini'),
+                llm_backend=prior_knowledge.get("llm_backend", "openai:gpt-4o-mini"),
                 created_at=datetime.now().isoformat(),
-                updated_at=datetime.now().isoformat()
+                updated_at=datetime.now().isoformat(),
             )
             self.personas[speaker_id] = persona
-            print(f"[INFO] Created new persona for {speaker_id}")
 
-        # 역할 정보
-        if 'role' in prior_knowledge:
-            persona.role = prior_knowledge['role']
+        if "role" in prior_knowledge:
+            persona.role = prior_knowledge["role"]
+        if "department" in prior_knowledge:
+            persona.department = prior_knowledge["department"]
+        if "expertise" in prior_knowledge:
+            persona.expertise = prior_knowledge["expertise"]
+        if "personality_keywords" in prior_knowledge:
+            persona.personality_keywords = prior_knowledge["personality_keywords"]
+        if "communication_style" in prior_knowledge:
+            persona.communication_style.update(prior_knowledge["communication_style"])
+        if "llm_backend" in prior_knowledge:
+            persona.llm_backend = prior_knowledge["llm_backend"]
 
-        if 'department' in prior_knowledge:
-            persona.department = prior_knowledge['department']
-
-        # 전문성
-        if 'expertise' in prior_knowledge:
-            persona.expertise = prior_knowledge['expertise']
-
-        # 성격 키워드
-        if 'personality_keywords' in prior_knowledge:
-            persona.personality_keywords = prior_knowledge['personality_keywords']
-
-        # 말투 스타일
-        if 'communication_style' in prior_knowledge:
-            persona.communication_style.update(prior_knowledge['communication_style'])
-
-        # LLM 백엔드
-        if 'llm_backend' in prior_knowledge:
-            persona.llm_backend = prior_knowledge['llm_backend']
-
-        # 나머지는 prior_knowledge에 저장
         persona.prior_knowledge.update(prior_knowledge)
-
         persona.updated_at = datetime.now().isoformat()
         self.save_persona(speaker_id)
 
         print(f"[INFO] Enriched persona {speaker_id} with prior knowledge")
         return True
 
-    def analyze_speech_patterns(self, speaker_id: str) -> Dict:
-        """
-        발언 패턴 자동 분석
-        RAG에서 화자의 모든 발언을 가져와 패턴 추출
-        """
-        # RAG에서 화자 발언 조회
+    # --------------------------------------------------------------
+    # 말투 패턴 분석
+    # --------------------------------------------------------------
+    def analyze_speech_patterns(self, speaker_id: str) -> Dict[str, Any]:
         utterances = self.rag_store.search_by_speaker(speaker_id, topk=1000)
-
         if not utterances:
             return {}
 
-        texts = [u['text'] for u in utterances]
+        texts = [u["text"] for u in utterances]
 
-        # 간단한 패턴 분석
         from collections import Counter
 
-        patterns = {
-            'total_utterances': len(texts),
-            'avg_length': sum(len(t) for t in texts) / len(texts),
-            'total_words': sum(len(t.split()) for t in texts),
-            'avg_words_per_utterance': sum(len(t.split()) for t in texts) / len(texts),
+        patterns: Dict[str, Any] = {
+            "total_utterances": len(texts),
+            "avg_length": sum(len(t) for t in texts) / len(texts),
+            "total_words": sum(len(t.split()) for t in texts),
         }
+        patterns["avg_words_per_utterance"] = patterns["total_words"] / max(
+            patterns["total_utterances"], 1
+        )
 
-        # 자주 사용하는 구문 (2-gram)
+        # 2-gram으로 자주 나오는 구문
         bigrams = []
-        for text in texts:
-            words = text.split()
-            bigrams.extend([f"{words[i]} {words[i+1]}" for i in range(len(words)-1)])
-
+        for t in texts:
+            words = t.split()
+            bigrams.extend(
+                [f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1)]
+            )
         common_bigrams = Counter(bigrams).most_common(10)
-        patterns['common_phrases'] = [phrase for phrase, _ in common_bigrams]
+        patterns["common_phrases"] = [p for p, _ in common_bigrams]
 
-        # 문장 끝 표현 분석 (말투 특징)
+        # 마지막 3글자 기준 종결 어미
         endings = []
-        for text in texts:
-            sentences = [s.strip() for s in text.split('.') if s.strip()]
-            for sent in sentences:
-                if len(sent) > 3:
-                    endings.append(sent[-3:])  # 마지막 3글자
-
+        for t in texts:
+            sentences = [s.strip() for s in t.split(".") if s.strip()]
+            for s in sentences:
+                if len(s) > 3:
+                    endings.append(s[-3:])
         common_endings = Counter(endings).most_common(5)
-        patterns['sentence_endings'] = [end for end, _ in common_endings]
+        patterns["sentence_endings"] = [e for e, _ in common_endings]
 
         return patterns
 
     def auto_update_speech_patterns(self, speaker_id: str):
-        """
-        자동 말투 패턴 업데이트 (5회 발언마다 호출)
-        """
         persona = self.get_persona(speaker_id)
         if not persona:
             return
 
-        # 패턴 분석
         patterns = self.analyze_speech_patterns(speaker_id)
-
         if not patterns:
             return
 
-        # 페르소나 업데이트
         persona.speech_patterns = patterns
         persona.updated_at = datetime.now().isoformat()
 
@@ -494,24 +426,43 @@ class DigitalPersonaManager:
 
         self.save_persona(speaker_id)
 
+    # --------------------------------------------------------------
+    # System prompt 결합
+    # --------------------------------------------------------------
+    def build_combined_system_prompt(self, speaker_id: str) -> str:
+        """
+        speaker_id 기준으로
+        - PersonaStore의 설문/선호 프롬프트
+        - DigitalPersona의 이력 기반 프롬프트
+        를 합친 최종 system prompt 생성
+        """
+        base_sys = self.persona_store.build_system_prompt(speaker_id)
+        persona = self.get_persona(speaker_id)
+
+        if not persona:
+            # 설문만 있는 경우
+            return base_sys or "You are a helpful assistant."
+
+        dp_sys = persona.generate_system_prompt()
+
+        if base_sys:
+            return base_sys + "\n\n" + dp_sys
+        return dp_sys
+
+    # --------------------------------------------------------------
     def get_all_personas(self) -> List[DigitalPersona]:
-        """모든 페르소나 조회"""
         return list(self.personas.values())
 
     def delete_persona(self, speaker_id: str):
-        """페르소나 삭제 (QLoRA 어댑터도 함께 삭제)"""
         import shutil
 
-        # 1. 페르소나 JSON 파일 삭제
         path = os.path.join(self.storage_path, f"{speaker_id}.json")
         if os.path.exists(path):
             os.remove(path)
 
-        # 2. 메모리 캐시에서 제거
         if speaker_id in self.personas:
             del self.personas[speaker_id]
 
-        # 3. QLoRA 어댑터 디렉터리 삭제
         adapter_dir = os.path.join("adapters", speaker_id)
         if os.path.exists(adapter_dir):
             try:

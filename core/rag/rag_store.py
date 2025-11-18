@@ -21,7 +21,7 @@ except Exception:
 
 # ----- 프로젝트 내부 의존 (없으면 안전하게 처리) -----
 try:
-    from .audio import Segment  # 회의 세그먼트 타입 (선택)
+    from core.audio import Segment  # 회의 세그먼트 타입 (선택)
 except ImportError:
     Segment = None
 
